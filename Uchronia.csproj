@@ -1,0 +1,181 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{50464BFA-DCE1-4753-A76F-9C22EB3858ED}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Gedemon.Uchronia</RootNamespace>
+    <AssemblyName>Gedemon.Uchronia</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony, Version=2.5.4.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\BepInEx\0Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude, Version=2.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.AI">
+      <HintPath>lib\publicized\Amplitude.AI.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Core, Version=2.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.EGS">
+      <HintPath>lib\publicized\Amplitude.EGS.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Framework, Version=2.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Framework.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Graphics, Version=2.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Graphics.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.IO">
+      <HintPath>lib\publicized\Amplitude.IO.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Mercury.AI.Brain, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Mercury.AI.Brain.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Mercury.Animation">
+      <HintPath>lib\publicized\Amplitude.Mercury.Animation.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Mercury.Data, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Mercury.Data.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Mercury.Firstpass, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Mercury.Firstpass.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Mercury.Fx, Version=0.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Mercury.Fx.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Mercury.Terrain, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Mercury.Terrain.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.Mercury.WorldGenerator, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.Mercury.WorldGenerator.dll</HintPath>
+    </Reference>
+    <Reference Include="Amplitude.UI, Version=2.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Amplitude.UI.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\publicized\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="BepInEx, Version=5.4.15.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\BepInEx\BepInEx.dll</HintPath>
+    </Reference>
+    <Reference Include="BepInEx.Harmony, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\BepInEx\BepInEx.Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=11.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\managed\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="Sirenix.Serialization, Version=3.0.3.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\managed\Sirenix.Serialization.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+    <Reference Include="UnityEngine, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\managed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\managed\UnityEngine.AssetBundleModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\managed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>lib\managed\UnityEngine.ImageConversionModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>lib\managed\UnityEngine.IMGUIModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\managed\UnityEngine.InputLegacyModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>lib\managed\UnityEngine.PhysicsModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Amplitude.Framework\OptionManagerPatch.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\BattleAutoResolverPatch.cs" />
+    <Compile Include="BattlePosture.cs" />
+    <Compile Include="CityMap.cs" />
+    <Compile Include="DatabaseUtils.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfTheInteriorPatch.cs" />
+    <Compile Include="MapUtils.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\SandboxPatch.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfDefensePatch.cs" />
+    <Compile Include="Assembly-CSharp\GamePatch.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\MajorEmpirePatch.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\MinorFactionPatch.cs" />
+    <Compile Include="TradeRoute.cs" />
+    <Compile Include="ModLoading.cs" />
+    <Compile Include="Types.cs" />
+    <Compile Include="TerritoryChange.cs" />
+    <Compile Include="CultureChange.cs" />
+    <Compile Include="CultureUnlock.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\CivilizationsManagerPatch.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\CollectibleManagerPatch.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfDevelopmentPatch.cs" />
+    <Compile Include="Assembly-CSharp\FactionCardPatch.cs" />
+    <Compile Include="Uchronia.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\WorldPatch.cs" />
+    <Compile Include="HumankindModTool\GameOptionHelper.cs" />
+    <Compile Include="HumankindModTool\GameOptionInfo.cs" />
+    <Compile Include="HumankindModTool\GameOptionStateInfo.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

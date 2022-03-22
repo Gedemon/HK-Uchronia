@@ -465,45 +465,6 @@ namespace Gedemon.Uchronia
 			}
 		};
 
-		public static readonly GameOptionInfo NewEmpireSpawningOption = new GameOptionInfo
-		{
-			ControlType = UIControlType.DropList,
-			Key = "GameOption_TCL_NewEmpireSpawningOption",
-			GroupKey = "GameOptionGroup_LobbyDifficultyOptions",
-			DefaultValue = "1",
-			Title = "[TCL] New Empires spawn",
-			Description = "Set how New Empires will Spawn mid-game from the pool of Empire Slots (ie when the Neolithic Start Slots are lower than the Maximum Number of Competitors)",
-			States =
-			{
-				new GameOptionStateInfo
-				{
-					Title = "Only on Split",
-					Description = "Only spawn when a previous Empire is split during Culture Change",
-					Value = "0"
-				},
-				new GameOptionStateInfo
-				{
-					Title = "From Minor",
-					Description = "Can spawn on Empire split and from Minor Factions",
-					Value = "1"
-				},
-				/*
-				new GameOptionStateInfo
-				{
-					Title = "From AI players",
-					Description = "Can spawn on Empire split and from AI players (Minor Factions or Major Empires on transcending)",
-					Value = "2"
-				},
-				new GameOptionStateInfo
-				{
-					Title = "From all players",
-					Description = "Can spawn on Empire split and from all players on transcending",
-					Value = "3"
-				}
-				//*/
-			}
-		};
-
 		public static readonly GameOptionInfo StartPositionList = new GameOptionInfo
 		{
 			ControlType = UIControlType.DropList,
@@ -572,55 +533,6 @@ namespace Gedemon.Uchronia
 			}
 		};
 
-		public static readonly GameOptionInfo TerritoryLossIgnoreAI = new GameOptionInfo
-		{
-			ControlType = UIControlType.Toggle,
-			Key = "GameOption_TCL_NoTerritoryLossForAI",
-			GroupKey = "GameOptionGroup_LobbyDifficultyOptions",
-			DefaultValue = "False",
-			Title = "[TCL] No Territory Loss For the AI",
-			Description = "Toggle to set if the AI ignore the other settings and always keep its full territory",
-			States =
-			{
-				new GameOptionStateInfo
-				{
-					Title = "On",
-					Description = "On",
-					Value = "True"
-				},
-				new GameOptionStateInfo
-				{
-					Title = "Off",
-					Description = "Off",
-					Value = "False"
-				}
-			}
-		};
-
-		public static readonly GameOptionInfo TerritoryLossLimitDecisionForAI = new GameOptionInfo
-		{
-			ControlType = UIControlType.Toggle,
-			Key = "GameOption_TCL_TerritoryLossLimitDecisionForAI",
-			GroupKey = "GameOptionGroup_LobbyDifficultyOptions",
-			DefaultValue = "False",
-			Title = "[TCL] Limit Choices For AI",
-			Description = "Toggle to limit AI Empires to Culture choices that doesn't result in a big territory loss",
-			States =
-			{
-				new GameOptionStateInfo
-				{
-					Title = "On",
-					Description = "On",
-					Value = "True"
-				},
-				new GameOptionStateInfo
-				{
-					Title = "Off",
-					Description = "Off",
-					Value = "False"
-				}
-			}
-		};
 
 		public static readonly GameOptionInfo StartingOutpostForMinorOption = new GameOptionInfo
 		{
@@ -655,56 +567,6 @@ namespace Gedemon.Uchronia
 			DefaultValue = "True",
 			Title = "[TCL] Larger Spawn Area For Minor Faction",
 			Description = "Toggle to set if the Minor Factions are allowed to spawn in adjacent territories or if they can only spawn in their starting positions territory. As a lot of territories are shared with the Major Empires, allowing a larger spawn area means more Minor Factions will be able to spawn.",
-			States =
-			{
-				new GameOptionStateInfo
-				{
-					Title = "On",
-					Description = "On",
-					Value = "True"
-				},
-				new GameOptionStateInfo
-				{
-					Title = "Off",
-					Description = "Off",
-					Value = "False"
-				}
-			}
-		};
-
-		public static readonly GameOptionInfo RespawnDeadPlayersOption = new GameOptionInfo
-		{
-			ControlType = UIControlType.Toggle,
-			Key = "GameOption_TCL_RespawnDeadPlayersOption",
-			GroupKey = "GameOptionGroup_LobbyDifficultyOptions",
-			DefaultValue = "True",
-			Title = "[TCL] Respawning Dead Players",
-			Description = "Toggle to set if dead players are allowed to re-spawn when there are no Empire left in the free Empires pool (set when the Neolithic Start Slots are lower than the Maximum Number of Competitors)",
-			States =
-			{
-				new GameOptionStateInfo
-				{
-					Title = "On",
-					Description = "On",
-					Value = "True"
-				},
-				new GameOptionStateInfo
-				{
-					Title = "Off",
-					Description = "Off",
-					Value = "False"
-				}
-			}
-		};
-
-		public static readonly GameOptionInfo EliminateLastEmpiresOption = new GameOptionInfo
-		{
-			ControlType = UIControlType.Toggle,
-			Key = "GameOption_TCL_EliminateLastEmpiresOption",
-			GroupKey = "GameOptionGroup_LobbyDifficultyOptions",
-			DefaultValue = "False",
-			Title = "[TCL] Eliminate Last Empires <c=FF00FF>*Experimental*</c>",
-			Description = "Toggle to eliminate AI Empires that are lagging in a previous Era to free Slots for new Empires (if the Respawning Dead Players option is used)",
 			States =
 			{
 				new GameOptionStateInfo
@@ -777,23 +639,16 @@ namespace Gedemon.Uchronia
 
 		public bool Enabled => GameOptionHelper.CheckGameOption(UseTrueCultureLocation, "True");
 		public bool OnlyCultureTerritory => !GameOptionHelper.CheckGameOption(TerritoryLossOption, "TerritoryLoss_None");
-		public bool RespawnDeadPlayer => GameOptionHelper.CheckGameOption(RespawnDeadPlayersOption, "True");
-		public bool EliminateLastEmpires => GameOptionHelper.CheckGameOption(EliminateLastEmpiresOption, "True");
 		public bool HistoricalDistricts => GameOptionHelper.CheckGameOption(HistoricalDistrictsOption, "True");
 		public bool UseCityMap => GameOptionHelper.CheckGameOption(CityMapOption, "True");
 		public bool KeepAttached => GameOptionHelper.CheckGameOption(TerritoryLossOption, "TerritoryLoss_KeepAttached");
 		public bool KeepOnlyCore => GameOptionHelper.CheckGameOption(TerritoryLossOption, "TerritoryLoss_Full_Core");
-		public bool NoLossForAI => GameOptionHelper.CheckGameOption(TerritoryLossIgnoreAI, "True");
-		public bool LimitDecisionForAI => GameOptionHelper.CheckGameOption(TerritoryLossLimitDecisionForAI, "True");
 		public bool OnlyOldWorldStart => GameOptionHelper.CheckGameOption(StartPositionList, "OldWorld");
 		public bool OnlyExtraStart => GameOptionHelper.CheckGameOption(StartPositionList, "ExtraStart");
 		public bool StartingOutpostForAI => !GameOptionHelper.CheckGameOption(StartingOutpost, "Off");
 		public bool StartingOutpostForHuman => GameOptionHelper.CheckGameOption(StartingOutpost, "On");
 		public bool StartingOutpostForMinorFaction => GameOptionHelper.CheckGameOption(StartingOutpostForMinorOption, "True");
 		public bool LargerSpawnAreaForMinorFaction => GameOptionHelper.CheckGameOption(LargerSpawnAreaForMinorOption, "True");
-		public bool empireCanSpawnFromMinorFactions => int.Parse(GameOptionHelper.GetGameOption(NewEmpireSpawningOption)) > 0;
-		public bool empireCanSpawnFromAI => int.Parse(GameOptionHelper.GetGameOption(NewEmpireSpawningOption)) > 1;
-		public bool empireCanSpawnFromHuman => int.Parse(GameOptionHelper.GetGameOption(NewEmpireSpawningOption)) > 2;
 		public bool CanCreateTrueCultureLocation => !GameOptionHelper.CheckGameOption(CreateTrueCultureLocationOption, "Off");
 		public bool UseShiftToCreateTCL => GameOptionHelper.CheckGameOption(CreateTrueCultureLocationOption, "ShiftedCoordinates");
 		public bool UseCoordinatesToCreateTCL => GameOptionHelper.CheckGameOption(CreateTrueCultureLocationOption, "Coordinates");
@@ -815,14 +670,6 @@ namespace Gedemon.Uchronia
 		{
 			return Instance.EmpireIconsNumColumn;
 		}
-		public static bool CanRespawnDeadPlayer()
-		{
-			return Instance.RespawnDeadPlayer;
-		}
-		public static bool CanEliminateLastEmpires()
-		{
-			return Instance.EliminateLastEmpires;
-		}
 		public static bool KeepHistoricalDistricts()
 		{
 			return Instance.HistoricalDistricts;
@@ -831,18 +678,6 @@ namespace Gedemon.Uchronia
 		{
 			return Instance.UseCityMap;
 		}		
-		public static bool EmpireCanSpawnFromMinorFactions()
-		{
-			return Instance.empireCanSpawnFromMinorFactions;
-		}
-		public static bool EmpireCanSpawnFromAI()
-		{
-			return Instance.empireCanSpawnFromAI;
-		}
-		public static bool EmpireCanSpawnFromhuman()
-		{
-			return Instance.empireCanSpawnFromHuman;
-		}
 		public static bool KeepOnlyCultureTerritory()
 		{
 			return Instance.OnlyCultureTerritory;
@@ -854,10 +689,6 @@ namespace Gedemon.Uchronia
 		public static bool KeepTerritoryAttached()
 		{
 			return Instance.KeepAttached;
-		}
-		public static bool NoTerritoryLossForAI()
-		{
-			return Instance.NoLossForAI;
 		}
 		public static int GetEraIndexCityRequiredForUnlock()
 		{
@@ -882,10 +713,6 @@ namespace Gedemon.Uchronia
 		public static bool UseExtraEmpireSlots()
 		{
 			return Instance.TotalEmpireSlots > 0;
-		}
-		public static bool UseLimitDecisionForAI()
-		{
-			return Instance.LimitDecisionForAI;
 		}
 		public static bool UseOnlyOldWorldStart()
 		{

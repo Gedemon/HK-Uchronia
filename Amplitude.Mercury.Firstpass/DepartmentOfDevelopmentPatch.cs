@@ -21,7 +21,7 @@ namespace Gedemon.Uchronia
 		public static void ApplyFactionChange(DepartmentOfDevelopment __instance)
 		{
 			Diagnostics.LogError($"[Gedemon] in ApplyFactionChange, {__instance.majorEmpire.PersonaName} is changing faction from  {__instance.majorEmpire.FactionDefinition.Name} to {__instance.nextFactionName}");
-			Diagnostics.Log($"[Gedemon] UseTrueCultureLocation() = {CultureUnlock.UseTrueCultureLocation()}, KeepOnlyCultureTerritory =  {Uchronia.KeepOnlyCultureTerritory()},  KeepTerritoryAttached = {Uchronia.KeepTerritoryAttached()}, NoTerritoryLossForAI = {Uchronia.NoTerritoryLossForAI()}, TerritoryLossOption = {GameOptionHelper.GetGameOption(Uchronia.TerritoryLossOption)}");
+			Diagnostics.Log($"[Gedemon] UseTrueCultureLocation() = {CultureUnlock.UseTrueCultureLocation()}, KeepOnlyCultureTerritory =  {Uchronia.KeepOnlyCultureTerritory()},  KeepTerritoryAttached = {Uchronia.KeepTerritoryAttached()}, TerritoryLossOption = {GameOptionHelper.GetGameOption(Uchronia.TerritoryLossOption)}");
 
 			MajorEmpire majorEmpire = __instance.majorEmpire;
 			StaticString nextFactionName = __instance.nextFactionName;
@@ -75,7 +75,7 @@ namespace Gedemon.Uchronia
 
 			/* Gedemon <<<<< */
 
-			if (CultureUnlock.UseTrueCultureLocation())
+			if (CultureUnlock.UseTrueCultureLocation() && factionDefinition.Name != __instance.Empire.FactionDefinition.Name) // always allow transcendance
 			{
 				bool lockedByTerritory = true;
 				bool lockedByStartingSlot = true;
@@ -120,47 +120,6 @@ namespace Gedemon.Uchronia
 							}
 						}
 					}
-
-					// Check for AI Decision control
-					if ((!majorEmpire.IsControlledByHuman) && Uchronia.UseLimitDecisionForAI() && (!lockedByTerritory) && (!Uchronia.NoTerritoryLossForAI()))
-					{
-						int territoriesLost = 0;
-						int territoriesCount = 0;
-
-						for (int j = 0; j < count; j++)
-						{
-							Settlement settlement = majorEmpire.Settlements[j];
-
-							bool hasTerritoryFromNewCulture = false;
-							int territoriesRemovedFromSettlement = 0;
-
-							int count2 = settlement.Region.Entity.Territories.Count;
-							territoriesCount += count2;
-
-							for (int k = 0; k < count2; k++)
-							{
-								Territory territory = settlement.Region.Entity.Territories[k];
-								if (CultureUnlock.HasCoreTerritory(factionName, territory.Index))
-									hasTerritoryFromNewCulture = true;
-								else
-									territoriesRemovedFromSettlement += 1;
-							}
-
-							bool keepSettlement = hasTerritoryFromNewCulture && Uchronia.KeepTerritoryAttached();
-
-							if (!keepSettlement)
-							{
-								territoriesLost += territoriesRemovedFromSettlement;
-							}
-						}
-
-						if (territoriesLost > territoriesCount * 0.5)
-						{
-							//Diagnostics.Log($"[Gedemon] in ComputeFactionStatus, AI limitation from territory loss = {territoriesLost} / {territoriesCount}");
-							lockedByTerritory = true;
-						}
-					}
-
 				}
 				if (CultureUnlock.IsUnlockedByPlayerSlot(factionName, majorEmpire.Index))
 				{

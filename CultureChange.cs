@@ -27,7 +27,6 @@ namespace Gedemon.Uchronia
 
 			SimulationEvent<SimulationEvent_TurnEnd>.Raised += new Action<object, SimulationEvent_TurnEnd>(SimulationEventRaised_TurnEnd);
 		}
-
 		public static void Unload()
 		{
 			Diagnostics.LogWarning($"[Gedemon] [CultureChange] OnUnload: TrueCultureLocation.IsEnabled = {Uchronia.IsEnabled()}");
@@ -36,132 +35,136 @@ namespace Gedemon.Uchronia
 
 			SimulationEvent<SimulationEvent_TurnEnd>.Raised -= new Action<object, SimulationEvent_TurnEnd>(SimulationEventRaised_TurnEnd);
 		}
-
 		public static bool IsSleepingEmpire(MajorEmpire majorEmpire)
         {
 			return majorEmpire.IsAlive && majorEmpire.Armies.Count == 0 && majorEmpire.Settlements.Count == 0 && majorEmpire.OccupiedCityCount.Value == 0;
         }
-
 		private static void SimulationEventRaised_TurnEnd(object sender, SimulationEvent_TurnEnd simulationEventTurnEnd)
         {
 			Diagnostics.LogWarning($"[Gedemon] [CultureChange] SimulationEventRaised_TurnEnd");
+			int numAwake = 0;
+			int minEra = int.MaxValue;
+			int maxEra = 0;
+			int numMajor = Amplitude.Mercury.Sandbox.Sandbox.MajorEmpires.Length;
+			int maxAwake = numMajor - 2;
+			int lastEmpires = 3; // when there is this number of major Empires left in the older era, check if they can be replaced by a Minor Faction
 
-			if (Uchronia.CanRespawnDeadPlayer() && Uchronia.CanEliminateLastEmpires())
+			IDictionary<int, List<MajorEmpire>> EmpiresPerEra = new Dictionary<int, List<MajorEmpire>>();
+			for (int empireIndex = 0; empireIndex < numMajor; empireIndex++)
 			{
+				MajorEmpire majorEmpire = Sandbox.MajorEmpires[empireIndex];
+				int empireEraIndex = majorEmpire.DepartmentOfDevelopment.CurrentEraIndex;
 
-				int numAwake = 0;
-				int minEra = int.MaxValue;
-				int maxEra = 0;
-				int numMajor = Amplitude.Mercury.Sandbox.Sandbox.MajorEmpires.Length;
-				int maxAwake = numMajor - 2;
-				int lastEmpires = 3; // when there is this number of major Empires left in the older era, check if they can be replaced by a Minor Faction
+				if (!IsSleepingEmpire(majorEmpire))
+					numAwake++;
+				else
+					continue;
 
-				IDictionary<int, List<MajorEmpire>> EmpiresPerEra = new Dictionary<int, List<MajorEmpire>>();
-				for (int empireIndex = 0; empireIndex < numMajor; empireIndex++)
+				minEra = minEra > empireEraIndex ? empireEraIndex : minEra;
+				maxEra = maxEra < empireEraIndex ? empireEraIndex : maxEra;
+
+				if (EmpiresPerEra.TryGetValue(empireEraIndex, out List<MajorEmpire> Empires))
 				{
-					MajorEmpire majorEmpire = Sandbox.MajorEmpires[empireIndex];
-					int empireEraIndex = majorEmpire.DepartmentOfDevelopment.CurrentEraIndex;
+					Empires.Add(majorEmpire);
+					EmpiresPerEra[empireEraIndex] = Empires;
+				}
+				else
+				{
+					EmpiresPerEra.Add(empireEraIndex, new List<MajorEmpire> { majorEmpire });
+				}
+			}
+			Diagnostics.LogWarning($"[Gedemon] [CultureChange] numAwake = {numAwake}, maxAwake = {maxAwake}, maxEra = {maxEra}, minEra = {minEra}, EmpiresPerEra[minEra].Count = {EmpiresPerEra[minEra].Count}, lastEmpires = {lastEmpires}");
+			if (numAwake >= maxAwake && maxEra > minEra && EmpiresPerEra[minEra].Count <= lastEmpires)
+			{
+				FixedPoint defaultGameSpeedMultiplier = Sandbox.GameSpeedController.CurrentGameSpeedDefinition.DefaultGameSpeedMultiplier;
+				FixedPoint minLifeSpan = 60 * defaultGameSpeedMultiplier;
+				foreach (MajorEmpire majorEmpire in EmpiresPerEra[minEra])
+				{
+					MajorEmpireExtension empireExtension = MajorEmpireSaveExtension.GetExtension(majorEmpire.Index);
+					int LifeSpan = SandboxManager.Sandbox.Turn - empireExtension.SpawnTurn;
 
-					if (!IsSleepingEmpire(majorEmpire))
-						numAwake++;
-					else
+					Diagnostics.LogWarning($"[Gedemon] [CultureChange] - potential Fallen Empire : {majorEmpire.FactionDefinition.Name}, ID#{majorEmpire.Index}, LifeSpan = {LifeSpan}, minLife = {minLifeSpan}, EraStar = {majorEmpire.EraStarsCount.Value}, RequiredStar = {majorEmpire.DepartmentOfDevelopment.CurrentEraStarRequirement}");
+
+					// Check before removing...
+					if (IsSleepingEmpire(majorEmpire))
 						continue;
 
-					minEra = minEra > empireEraIndex ? empireEraIndex : minEra;
-					maxEra = maxEra < empireEraIndex ? empireEraIndex : maxEra;
+					if (majorEmpire.OccupiedCityCount.Value > 0)
+						continue;
 
-					if (EmpiresPerEra.TryGetValue(empireEraIndex, out List<MajorEmpire> Empires))
-                    {
-						Empires.Add(majorEmpire);
-						EmpiresPerEra[empireEraIndex] = Empires;
-					}
-					else
-                    {
-						EmpiresPerEra.Add(empireEraIndex, new List<MajorEmpire> { majorEmpire });
-					}
-				}
-				Diagnostics.LogWarning($"[Gedemon] [CultureChange] numAwake = {numAwake}, maxAwake = {maxAwake}, maxEra = {maxEra}, minEra = {minEra}, EmpiresPerEra[minEra].Count = {EmpiresPerEra[minEra].Count}, lastEmpires = {lastEmpires}");
-				if (numAwake >= maxAwake && maxEra > minEra && EmpiresPerEra[minEra].Count <= lastEmpires)
-				{
+					if (LifeSpan < minLifeSpan)
+						continue;
 
-					FixedPoint defaultGameSpeedMultiplier = Sandbox.GameSpeedController.CurrentGameSpeedDefinition.DefaultGameSpeedMultiplier;
-					FixedPoint minLifeSpan = 60 * defaultGameSpeedMultiplier;
-					foreach(MajorEmpire majorEmpire in EmpiresPerEra[minEra])
+					if (majorEmpire.EraStarsCount.Value == majorEmpire.DepartmentOfDevelopment.CurrentEraStarRequirement)
+						continue;
+
+					if (Uchronia.IsEmpireHumanSlot(majorEmpire.Index))
+						continue;
+
+					//CityFlags.Besieged
+					bool hasCityUnderSiege = false;
+					int numCities = majorEmpire.Cities.Count;
+					for (int c = 0; c < numCities; c++)
 					{
-						MajorEmpireExtension empireExtension = MajorEmpireSaveExtension.GetExtension(majorEmpire.Index);
-						int LifeSpan = SandboxManager.Sandbox.Turn - empireExtension.SpawnTurn;
-
-						Diagnostics.LogWarning($"[Gedemon] [CultureChange] - potential Fallen Empire : {majorEmpire.FactionDefinition.Name}, ID#{majorEmpire.Index}, LifeSpan = {LifeSpan}, minLife = {minLifeSpan}, EraStar = {majorEmpire.EraStarsCount.Value}, RequiredStar = {majorEmpire.DepartmentOfDevelopment.CurrentEraStarRequirement}");
-
-						// Check before removing...
-						if (IsSleepingEmpire(majorEmpire))
-							continue;
-
-						if (majorEmpire.OccupiedCityCount.Value > 0)
-							continue;
-
-						if (LifeSpan < minLifeSpan)
-							continue;
-
-						if(majorEmpire.EraStarsCount.Value == majorEmpire.DepartmentOfDevelopment.CurrentEraStarRequirement)
-							continue;
-
-						if (Uchronia.IsEmpireHumanSlot(majorEmpire.Index))
-							continue;
-
-						//CityFlags.Besieged
-						bool hasCityUnderSiege = false;
-						int numCities = majorEmpire.Cities.Count;
-						for (int c = 0; c < numCities; c++)
+						if ((majorEmpire.Cities[c].CityFlags & CityFlags.Besieged) != 0)
 						{
-							if ((majorEmpire.Cities[c].CityFlags & CityFlags.Besieged) != 0)
-							{
-								hasCityUnderSiege = true;
-								break;
-							}
+							hasCityUnderSiege = true;
+							break;
 						}
-
-						if (hasCityUnderSiege)
-							continue;
-
-						bool hasLockedArmy = false;
-						int numArmies = majorEmpire.Armies.Count;
-						for(int a = 0; a < numArmies; a++)
-                        {
-							Army army = majorEmpire.Armies[a];
-							if (army.IsLocked)
-							{
-								hasLockedArmy = true;
-								break;
-							}
-						}
-
-						if (hasLockedArmy)
-							continue;
-
-						if (Sandbox.MinorFactionManager.minorEmpirePool.Count < 5)
-							continue;
-
-						Diagnostics.LogWarning($"[Gedemon] [CultureChange] - all checks passed, removing Major Empire...");
-
-						// All check done, destroy all armies
-						for (int a = 0; a < numArmies; a++)
-						{
-							Army army = majorEmpire.Armies[a];
-							Amplitude.Mercury.Sandbox.Sandbox.ArmyReleaseController.AddArmyToReleasePool(army, ReleaseType.Disbanded);
-							DepartmentOfDefense.TryRemoveSquadron(army, majorEmpire.DepartmentOfDefense);
-							DepartmentOfDefense.ReleaseArmy(army);
-							SimulationController.RefreshAll();
-						}
-
-						// Replace by minor factions
-						DoFactionChange(majorEmpire, new StaticString("Civilization_Era0_DefaultTribe"), CanReplaceMajor : false);
-
-						// Mark as Fallen Empire (to not be respawned from a Minor faction)
-						CurrentGame.Data.AddFallenEmpire(majorEmpire.FactionDefinition.Name);
-
-						break;
 					}
+
+					if (hasCityUnderSiege)
+						continue;
+
+					bool hasLockedArmy = false;
+					int numArmies = majorEmpire.Armies.Count;
+					for (int a = 0; a < numArmies; a++)
+					{
+						Army army = majorEmpire.Armies[a];
+						if (army.IsLocked)
+						{
+							hasLockedArmy = true;
+							break;
+						}
+					}
+
+					if (hasLockedArmy)
+						continue;
+
+					if (Sandbox.MinorFactionManager.minorEmpirePool.Count < 5)
+						continue;
+
+					Diagnostics.LogWarning($"[Gedemon] [CultureChange] - all checks passed, removing Major Empire (num Armies = {numArmies})");
+
+					// All check done, destroy all armies
+					for (int a = 0; a < numArmies; a++)
+					{
+						Diagnostics.LogWarning($"[Gedemon] [CultureChange] - army #{a}");
+						Army army = majorEmpire.Armies[a];
+						Diagnostics.Log($"[Gedemon] [CultureChange] - Calling TryRemoveSquadron()");
+						DepartmentOfDefense.TryRemoveSquadron(army, majorEmpire.DepartmentOfDefense);
+						Diagnostics.Log($"[Gedemon] [CultureChange] - Calling AddArmyToReleasePool()");
+						Amplitude.Mercury.Sandbox.Sandbox.ArmyReleaseController.AddArmyToReleasePool(army, ReleaseType.FailedRetreating);
+						Diagnostics.Log($"[Gedemon] [CultureChange] - Check before Calling ReleaseArmy() (army.WorldPosition.ToTileIndex() = {army.WorldPosition.ToTileIndex()})");
+						//
+						if (army.WorldPosition.ToTileIndex() != -1)
+						{
+							Diagnostics.Log($"[Gedemon] [CultureChange] - Calling ReleaseArmy()");
+							DepartmentOfDefense.ReleaseArmy(army);
+						}
+						Diagnostics.Log($"[Gedemon] [CultureChange] - Calling SimulationController.RefreshAll()");
+						SimulationController.RefreshAll();
+					}
+
+					Diagnostics.LogWarning($"[Gedemon] [CultureChange] - Calling DoFactionChange()");
+					// Replace by minor factions
+					DoFactionChange(majorEmpire, new StaticString("Civilization_Era0_DefaultTribe"), CanReplaceMajor: false);
+
+					Diagnostics.LogWarning($"[Gedemon] [CultureChange] - Calling AddFallenEmpire()");
+					// Mark as Fallen Empire (to not be respawned from a Minor faction)
+					CurrentGame.Data.AddFallenEmpire(majorEmpire.FactionDefinition.Name);
+
+					break;
 				}
 			}
 		}
@@ -872,11 +875,6 @@ namespace Gedemon.Uchronia
 			MajorEmpire freeEmpire = null;
 			int numMajor = Amplitude.Mercury.Sandbox.Sandbox.MajorEmpires.Length;
 
-			if(!Uchronia.CanRespawnDeadPlayer())
-            {
-				canResurect = false;
-			}
-
 			// check for unused Empire in the pool first
 			bool mustResurect = true;
 			for (int i = 0; i < numMajor; i++)
@@ -893,12 +891,12 @@ namespace Gedemon.Uchronia
             {
 				return freeEmpire;
 			}
-
+			
 			for (int i = 0; i < numMajor; i++)
 			{
 				MajorEmpire potentialEmpire = Sandbox.MajorEmpires[i];
 
-				Diagnostics.LogWarning($"[Gedemon] potentialEmpire = {potentialEmpire.FactionDefinition.Name}, Armies = {potentialEmpire.Armies.Count}, Settlements = {potentialEmpire.Settlements.Count}, mustResurect = {mustResurect}, isAlive = {potentialEmpire.IsAlive}, fame = {potentialEmpire.FameScore.Value}");
+				Diagnostics.LogWarning($"[Gedemon] potentialEmpire = {potentialEmpire.FactionDefinition.Name}, Armies = {potentialEmpire.Armies.Count}, Settlements = {potentialEmpire.Settlements.Count}, mustResurect = {null}, isAlive = {potentialEmpire.IsAlive}, fame = {potentialEmpire.FameScore.Value}");
 
 				// we don't want to resurect dead Empire with more fame than us !
 				if (!potentialEmpire.IsAlive && potentialEmpire.FameScore.Value >= maxFame)
@@ -907,7 +905,7 @@ namespace Gedemon.Uchronia
 					continue;
 				}
 
-				if (potentialEmpire.Armies.Count == 0 && potentialEmpire.Settlements.Count == 0 && potentialEmpire.OccupiedCityCount.Value == 0 && (potentialEmpire.IsAlive || mustResurect))
+				if (potentialEmpire.Armies.Count == 0 && potentialEmpire.Settlements.Count == 0 && potentialEmpire.OccupiedCityCount.Value == 0 && potentialEmpire.IsAlive)
 				{
 					freeEmpire = potentialEmpire;
 					return freeEmpire;

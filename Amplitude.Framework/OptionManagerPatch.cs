@@ -14,7 +14,7 @@ namespace Gedemon.Uchronia
 		{
 			var myLogSource = BepInEx.Logging.Logger.CreateLogSource("True Culture Location");
 			myLogSource.LogInfo("Initializing GameOptionDefinition...");
-			GameOptionHelper.Initialize(Uchronia.EmpireIconsNumColumnOption, Uchronia.HistoricalDistrictsOption, Uchronia.ExtraEmpireSlots, Uchronia.StartingOutpost, Uchronia.CityMapOption, Uchronia.StartPositionList, Uchronia.UseTrueCultureLocation, Uchronia.CreateTrueCultureLocationOption, Uchronia.SettlingEmpireSlotsOption, Uchronia.FirstEraRequiringCityToUnlock, Uchronia.StartingOutpostForMinorOption, Uchronia.LargerSpawnAreaForMinorOption, Uchronia.TerritoryLossOption, Uchronia.NewEmpireSpawningOption, Uchronia.RespawnDeadPlayersOption, Uchronia.EliminateLastEmpiresOption, Uchronia.CompensationLevel, Uchronia.TerritoryLossIgnoreAI, Uchronia.TerritoryLossLimitDecisionForAI);
+			GameOptionHelper.Initialize(Uchronia.EmpireIconsNumColumnOption, Uchronia.HistoricalDistrictsOption, Uchronia.ExtraEmpireSlots, Uchronia.StartingOutpost, Uchronia.CityMapOption, Uchronia.StartPositionList, Uchronia.UseTrueCultureLocation, Uchronia.CreateTrueCultureLocationOption, Uchronia.SettlingEmpireSlotsOption, Uchronia.FirstEraRequiringCityToUnlock, Uchronia.StartingOutpostForMinorOption, Uchronia.LargerSpawnAreaForMinorOption, Uchronia.TerritoryLossOption,  Uchronia.CompensationLevel);
 			myLogSource.LogInfo("GameOptionDefinition Initialized");
 			BepInEx.Logging.Logger.Sources.Remove(myLogSource);
 			return true;

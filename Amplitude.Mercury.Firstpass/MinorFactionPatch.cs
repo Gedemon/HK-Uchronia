@@ -22,7 +22,7 @@ namespace Gedemon.Uchronia
 				int territoryIndex = Amplitude.Mercury.Sandbox.Sandbox.World.TileInfo.Data[tileIndex].TerritoryIndex;
 				Territory territory = Amplitude.Mercury.Sandbox.Sandbox.World.Territories[territoryIndex];
 				int numAvailableFaction = __instance.availableMinorFactionDefinitions.Count;
-				int indexOverride = 0;
+				int indexOverride = -1;
 				bool foundFaction = false;
 
 				Diagnostics.LogWarning($"[Gedemon] in HumanMinorFactionSpawner, SpawnMinorFactionAt for tileIndex = {tileIndex}, territoryIndex = {territoryIndex}, Territory Name = {CultureUnlock.GetTerritoryName(territoryIndex)}, numAvailableFaction = {numAvailableFaction}");
@@ -57,6 +57,12 @@ namespace Gedemon.Uchronia
 						}
 					}
 				}
+
+				if (CultureUnlock.TryGetAvailableMajorFactionsForTerritory(territory.Index, out StaticString majorFactionName))
+				{
+					foundFaction = true;
+				}
+
 				if (!foundFaction)
 				{
 					Diagnostics.Log($"[Gedemon] no faction found, aborting...");
@@ -66,17 +72,23 @@ namespace Gedemon.Uchronia
 
 				// original method
 				{
+					FactionDefinition factionDefinition;
 					__instance.TryAllocateMinorFaction(out var minorEmpire);
 					BaseHumanSpawnerDefinition spawnerDefinitionForMinorEmpire = __instance.GetSpawnerDefinitionForMinorEmpire(minorEmpire);
-					int index = RandomHelper.Next(SandboxManager.Sandbox.Turn + Amplitude.Mercury.Sandbox.Sandbox.WorldSeed + (int)(ulong)minorEmpire.GUID, 0, __instance.availableMinorFactionDefinitions.Count);
+					int index;// = RandomHelper.Next(SandboxManager.Sandbox.Turn + Amplitude.Mercury.Sandbox.Sandbox.WorldSeed + (int)(ulong)minorEmpire.GUID, 0, __instance.availableMinorFactionDefinitions.Count);
 					// Gedemon <<<<<
-					if (foundFaction)
+					bool foundMinor = foundFaction && indexOverride != -1;
+					if (foundMinor)
 					{
 						index = indexOverride;
+						factionDefinition = __instance.availableMinorFactionDefinitions[index];
+						__instance.availableMinorFactionDefinitions.RemoveAt(index);
+					}
+					else
+                    {
+						factionDefinition = Utils.GameUtils.GetFactionDefinition(majorFactionName);
 					}
 					// Gedemon >>>>>
-					FactionDefinition factionDefinition = __instance.availableMinorFactionDefinitions[index];
-					__instance.availableMinorFactionDefinitions.RemoveAt(index);
 					minorEmpire.SetFaction(factionDefinition);
 					StaticString buildingVisualAffinityFor = factionDefinition.GetBuildingVisualAffinityFor(__instance.eraIndex);
 					MinorSpawnPoint minorSpawnPoint = Amplitude.Mercury.Sandbox.Sandbox.World.CreateSpawnPointAt(tileIndex, (byte)minorEmpire.Index, spawnerDefinitionForMinorEmpire.VisualAffinity.ElementName, buildingVisualAffinityFor, factionDefinition.Name);
@@ -212,6 +224,12 @@ namespace Gedemon.Uchronia
 					}
 				}
 
+				if (CultureUnlock.TryGetAvailableMajorFactionsForTerritory(territory.Index, out StaticString majorFactionName))
+                {
+					return true;
+                }
+				//
+
 				__result = false;
 				return false;
 			}
@@ -222,9 +240,9 @@ namespace Gedemon.Uchronia
 		[HarmonyPrefix]
 		public static void NewTurnBeginPass_UpdateMinorFactionsSpawning(MinorFactionManager __instance, SimulationPasses.PassContext context, string name)
 		{
-			Diagnostics.LogWarning($"[Gedemon] in NewTurnBeginPass_UpdateMinorFactionsSpawning, (PostFix) for {context}, GlobalEra index = {Sandbox.Timeline.GetGlobalEraIndex()}, Game Turn = {SandboxManager.Sandbox.Turn}, EmpireCanSpawnFromMinorFactions = {Uchronia.EmpireCanSpawnFromMinorFactions()}");
+			Diagnostics.LogWarning($"[Gedemon] in NewTurnBeginPass_UpdateMinorFactionsSpawning, (PostFix) for {context}, GlobalEra index = {Sandbox.Timeline.GetGlobalEraIndex()}, Game Turn = {SandboxManager.Sandbox.Turn}");
 
-			if (CultureUnlock.UseTrueCultureLocation() && Uchronia.EmpireCanSpawnFromMinorFactions())
+			if (CultureUnlock.UseTrueCultureLocation())
 			{
 				int numberOfMinorEmpires = Amplitude.Mercury.Sandbox.Sandbox.NumberOfMinorEmpires;
 				for (int i = 0; i < numberOfMinorEmpires; i++)
@@ -383,6 +401,8 @@ namespace Gedemon.Uchronia
 				}
 			}
 		}
+
+
 	}
 	//*/
 

@@ -159,6 +159,9 @@ namespace Gedemon.Uchronia
 				case Posture.Withdrawal:
 					postureString = "Withdrawal";
 					break;
+				default:
+					postureString = posture.ToString();
+					break;
 			}
 			
 			return postureString;
@@ -638,7 +641,7 @@ namespace Gedemon.Uchronia
 		{
 			if(__result != lastBattleBrainCreated)
 			{
-				Diagnostics.LogWarning($"[Gedemon][BattleController] GetOrCreateBrain (postfix): New brain created, BattleBrainPoolSize = {__instance.BattleBrainPoolSize}, battle.GUID = {simulationBattle.GUID}, brain ID = {__result}");
+				//Diagnostics.LogWarning($"[Gedemon][BattleController] GetOrCreateBrain (postfix): New brain created, BattleBrainPoolSize = {__instance.BattleBrainPoolSize}, battle.GUID = {simulationBattle.GUID}, brain ID = {__result}");
 				lastBattleBrainCreated = __result;
 			}
 		}
@@ -854,11 +857,27 @@ namespace Gedemon.Uchronia
 
 		}
 
-		[HarmonyPostfix]
+		[HarmonyPrefix]
 		[HarmonyPatch(nameof(Begin))]
 		public static void Begin(Battle battle, BattleState oldState, BattleState state)
 		{
-			Diagnostics.LogWarning($"[Gedemon][Battle] Begin: GUID = {battle.GUID}, oldState = {oldState}, state = {state}, HasBeenAutoResolve = {battle.HasBeenAutoResolve}");
+			Diagnostics.LogWarning($"[Gedemon][Battle] Begin (prefix): GUID = {battle.GUID}, oldState = {oldState}, state = {state}, HasBeenAutoResolve = {battle.HasBeenAutoResolve}");
+			if(state == BattleState.Finished)
+            {
+
+				//BattleExtension battleExtension = BattleSaveExtension.GetExtension(battle.GUID);
+				if (battle.VictoryType == BattleVictoryType.Retreat)
+				{
+					battle.FillAndSendFinalAftermathInfo();
+				}
+			}			
+		}
+
+		[HarmonyPostfix]
+		[HarmonyPatch(nameof(Begin))]
+		public static void BeginPost(Battle battle, BattleState oldState, BattleState state)
+		{
+			Diagnostics.LogWarning($"[Gedemon][Battle] Begin (postfix): GUID = {battle.GUID}, oldState = {oldState}, state = {state}, HasBeenAutoResolve = {battle.HasBeenAutoResolve}");
 		}
 	}
 
@@ -1157,7 +1176,7 @@ namespace Gedemon.Uchronia
 
 				__instance.turnsLabel.Text = Environment.NewLine + "Attacker posture : " + BattlePosture.GetPostureString(battleExtension.AttackerPosture) + Environment.NewLine + "Defender posture : " + BattlePosture.GetPostureString(battleExtension.DefenderPosture);
 				__instance.turnsLabel.SetHorizontalAlignment(HorizontalAlignment.Left);
-				__instance.turnsLabel.SetVerticalAlignment(VerticalAlignment.Center);
+				__instance.turnsLabel.SetVerticalAlignment(VerticalAlignment.Top);
 
 			}
 		}

@@ -89,9 +89,18 @@ namespace Gedemon.Uchronia
 
 		static public FixedPoint GetMoveModifier(FixedPoint attackerMoves, FixedPoint defenderMoves)
 		{
-			if(defenderMoves == 0)
+			if (defenderMoves == 0 && attackerMoves == 0)
+			{
+				return FixedPoint.One;
+			}
+
+			if (defenderMoves == 0)
 			{
 				return MaxMoveModifier;
+			}
+			if (attackerMoves == 0)
+			{
+				return MinMoveModifier;
 			}
 
 			FixedPoint ratio = attackerMoves > defenderMoves ? (attackerMoves / defenderMoves) / 2 : (defenderMoves / attackerMoves) / 2;
@@ -143,7 +152,7 @@ namespace Gedemon.Uchronia
 				AverageVeterency	= TotalVeterency / NumUnits;
 				AverageExperience	= TotalExperience / NumUnits;
 
-				CombatStrength		= AverageCombat * QJM.GetQualityFactor(AverageVeterency);
+				CombatStrength		= TotalCombat * QJM.GetQualityFactor(AverageVeterency);
 			}
 			else
             {
@@ -168,17 +177,19 @@ namespace Gedemon.Uchronia
 			{
 				UnitSimplifiedData unitData = listOfunits.Data[j];
 
-				Diagnostics.Log($"[Gedemon] unit #{j}: CombatStrength {unitData.CombatStrength}, HealthRatio {unitData.HealthRatio}, move = {(unitData.IsOnWater ? unitData.Unit.NavalSpeed.Value : unitData.Unit.LandSpeed.Value)}, XP = {unitData.ExperienceToReceive + unitData.Unit.Experience}, Fortification = {(unitData.IsFortification ? unitData.HealthRatio : 0)}");
 				if (unitData.IsFortification)
 				{
+					Diagnostics.Log($"[Gedemon] unit #{j}: Fortification = {unitData.HealthRatio}");
 					Fortification += unitData.HealthRatio;
 				}
 				else
 				{
+					Diagnostics.Log($"[Gedemon] unit #{j}: CombatStrength {unitData.CombatStrength}, HealthRatio {unitData.HealthRatio}, move = {(unitData.IsOnWater ? unitData.Unit.NavalSpeed.Value : unitData.Unit.LandSpeed.Value)}, XP = {unitData.ExperienceToReceive + unitData.Unit.Experience}, Fortification = {(unitData.IsFortification ? unitData.HealthRatio : 0)}");
 					NumUnits++;
 					TotalCombat += unitData.CombatStrength * unitData.HealthRatio;
 					TotalHealth += unitData.HealthRatio;
-					TotalMoves += unitData.IsOnWater ? unitData.Unit.NavalSpeed.Value : unitData.Unit.LandSpeed.Value;
+					FixedPoint baseMoves = unitData.IsOnWater ? unitData.Unit.NavalSpeed.Value : unitData.Unit.LandSpeed.Value;
+					TotalMoves += unitData.Unit.HasStatus(DepartmentOfDefense.RetreatedUnitStatusName) ? (FixedPoint)0.5* baseMoves : baseMoves;
 					TotalVeterency += unitData.Unit.VeterancyLevel.Value * unitData.HealthRatio;
 					TotalExperience += unitData.ExperienceToReceive + unitData.Unit.Experience;
 				}
@@ -214,8 +225,6 @@ namespace Gedemon.Uchronia
 			new Damage(40, 50)		// new Damage(100, 100)
 		};
 
-		static FixedPoint DamageModifier = (FixedPoint)0.25;
-
 		[HarmonyPrefix]
 		[HarmonyPatch(nameof(GetDamages))]
 		public static bool GetDamages(ref Damage __result, FixedPoint attackerStrength, FixedPoint defenderStrength)
@@ -230,12 +239,8 @@ namespace Gedemon.Uchronia
 				__result.MaximumDamage = FixedPoint.Max(left, __result.MinimumDamage);
 			}
 
-			Diagnostics.LogError($"[Gedemon][BattleAbilityHelper] GetDamages (before mod) : attackerStrength = {attackerStrength}, defenderStrength = {defenderStrength}, [{__result.MaximumDamage}, {__result.MinimumDamage}]");
+			//Diagnostics.LogError($"[Gedemon][BattleAbilityHelper] GetDamages (before mod) : attackerStrength = {attackerStrength}, defenderStrength = {defenderStrength}, [{__result.MaximumDamage}, {__result.MinimumDamage}]");
 
-			__result.MaximumDamage *= DamageModifier;
-			__result.MinimumDamage *= DamageModifier;
-
-			Diagnostics.LogError($"[Gedemon][BattleAbilityHelper] GetDamages (after  mod): attackerStrength = {attackerStrength}, defenderStrength = {defenderStrength}, [{__result.MaximumDamage}, {__result.MinimumDamage}]");
 			return true;
 		}
 	}
@@ -273,7 +278,7 @@ namespace Gedemon.Uchronia
 			}
 			_ = MercuryPreferences.VerboseInstantResolveLogs;
 
-			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] AutoResolve Postures (after): attacker = {battleExtension.AttackerPosture}, defender = {battleExtension.DefenderPosture}, victoryType = {battleExtension.VictoryType}");
+			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] AutoResolve Postures (after): attacker = {battleExtension.AttackerPosture}, defender = {battleExtension.DefenderPosture}, victoryType = {battleExtension.VictoryType}, winner = {workingContext.Winner}");
 
 			if (workingContext.Winner == Amplitude.Mercury.Interop.BattleGroupRoleType.Attacker)
 			{
@@ -326,17 +331,15 @@ namespace Gedemon.Uchronia
 				return true;
 			}
 
+			bool IsAssault = battle.Siege != null && battle.Siege.SiegeState != SiegeStates.Sortie;
+
 			BattleExtension battleExtension = BattleSaveExtension.GetExtension(battle.GUID);
-			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : battle GUID = {battle.GUID}, fortificationCount = {fortificationCount}");
+			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : battle GUID = {battle.GUID}, fortificationCount = {fortificationCount}, IsAssault = {IsAssault}");
 
 			int attackerCount = attackerUnits.Length;
 			int defenderCount = defenderUnits.Length;
 			attackerUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
 			defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
-
-			FixedPoint attackerInitialHealth = FixedPoint.Zero;
-			FixedPoint defenderInitialHealth = FixedPoint.Zero;
-
 
 			UnitGroupStats attackerGroupStats = new UnitGroupStats("Attacker");
 			attackerGroupStats.AddUnitData(attackerUnits);
@@ -347,7 +350,10 @@ namespace Gedemon.Uchronia
 			attackerGroupStats.ComputeStats();
 			defenderGroupStats.ComputeStats();
 
-			// AI POSTURE DECISIONS
+			FixedPoint attackerInitialHealth = attackerGroupStats.TotalHealth;
+			FixedPoint defenderInitialHealth = defenderGroupStats.TotalHealth;
+
+			#region AI POSTURE DECISION
 			Empire attackerEmpire = Sandbox.Empires[battle.InstigatorLeaderEmpireIndex];
 			if (!attackerEmpire.IsControlledByHuman)
 			{
@@ -395,7 +401,7 @@ namespace Gedemon.Uchronia
 						}
 						// Other posture
 						else
-						{                           
+						{
 							// very specific decisions
 							FixedPoint veryLogicalDecisionValue = (attackerGroupStats.AverageVeterency * 10) + 10; // [10-40]
 							if (veryLogicalDecisionValue >= postureRNG100)
@@ -473,8 +479,8 @@ namespace Gedemon.Uchronia
 				{
 					// logical decisions
 					FixedPoint logicalDecisionValue = (defenderGroupStats.AverageVeterency * 10) + 50; // [50-80]
-					if(logicalDecisionValue >= postureRNG100)
-                    {
+					if (logicalDecisionValue >= postureRNG100)
+					{
 						ratioRNG = (postureRNG100 - logicalDecisionValue) / 100;
 						// counter-attack if much stronger
 						if (defenderGroupStats.CombatStrength * QJM.HighReducingModifier > attackerGroupStats.CombatStrength)
@@ -490,7 +496,7 @@ namespace Gedemon.Uchronia
 									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (veryLogicalDecisionValue = {veryLogicalDecisionValue}, MoveModifier = {MoveModifier}, Veterency = {defenderGroupStats.AverageVeterency} vs {attackerGroupStats.AverageVeterency}");
 									goto DecisionTaken;
 								}
-                            }
+							}
 							// other decisions
 							if (defenderGroupStats.CombatStrength * QJM.VeryHighReducingModifier > attackerGroupStats.CombatStrength)
 							{
@@ -534,20 +540,21 @@ namespace Gedemon.Uchronia
 						}
 					}
 					// unexpected/risky decisions
-                    else
-                    {
+					else
+					{
 
-                    }
+					}
 				}
 
-				DecisionTaken:;
+			DecisionTaken:;
 			}
 
 			attackerGroupStats.GroupPosture = battleExtension.AttackerPosture;
 			defenderGroupStats.GroupPosture = battleExtension.DefenderPosture;
 
-			// BATTLE START
+			#endregion
 
+			#region BATTLE
 			for (int roundNum = 0; roundNum < MaxRound; roundNum++)
 			{
 				Posture attackerCurrentPosture = battleExtension.AttackerPosture;
@@ -555,7 +562,7 @@ namespace Gedemon.Uchronia
 
 				battleExtension.RoundNum = roundNum;
 
-				Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : Round #{roundNum+1}, attacker [{attackerCurrentPosture}, count={attackerCount}], defender [{defenderCurrentPosture}, count ={defenderCount}], fortificationCount={fortificationCount}, FortificationDamage={totalFortificationDamage}");
+				Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : Round #{roundNum + 1}, attacker [{attackerCurrentPosture}, count={attackerCount}], defender [{defenderCurrentPosture}, count ={defenderCount}], fortificationCount={fortificationCount}, FortificationDamage={totalFortificationDamage}");
 
 				string phasePresentation = $"Round {roundNum + 1} [Turn]";
 
@@ -579,6 +586,14 @@ namespace Gedemon.Uchronia
 				}
 				if (BattlePosture.IsDefensive(attackerCurrentPosture) && BattlePosture.IsDefensive(defenderCurrentPosture))
 				{
+					if(roundNum == 0)
+					{
+						battleExtension.VictoryType = IsAssault ? BattleVictoryType.Attrition : BattleVictoryType.Retreat;
+						battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Defender wins the battle: Attacker refused to engage combat.";
+						__result = BattleGroupRoleType.Defender;
+						return false;
+					}
+
 					phasePresentation += Environment.NewLine + $"Battle ended before combat with both opponents in defensive posture";
 					battleExtension.BattleSummary += roundNum == 0 ? phasePresentation : Environment.NewLine + Environment.NewLine + phasePresentation;
 					break;
@@ -604,17 +619,11 @@ namespace Gedemon.Uchronia
 					defenderGroupStats.ComputeStats();
 				}
 
-				if(roundNum==0)
-                {
-					attackerInitialHealth = attackerGroupStats.TotalHealth;
-					defenderInitialHealth = defenderGroupStats.TotalHealth;
-				}
-
 				FixedPoint attackerStartRoundHealth = attackerGroupStats.TotalHealth;
 				FixedPoint defenderStartRoundHealth = defenderGroupStats.TotalHealth;
 
-				phasePresentation += Environment.NewLine + $"Att. {attackerCurrentPosture}, {attackerCount}[Population], {attackerGroupStats.AverageMoves}[MovementSpeed], {attackerGroupStats.AverageCombat}[CombatStrength], {(int)(attackerGroupStats.AverageHealth*100)}%[Health], {attackerGroupStats.AverageVeterency}[Veterancy]";
-				phasePresentation += Environment.NewLine + $"Def. {defenderCurrentPosture}, {defenderCount}[Population], {defenderGroupStats.AverageMoves}[MovementSpeed], {defenderGroupStats.AverageCombat}[CombatStrength], {(int)(defenderGroupStats.AverageHealth*100)}%[Health], {defenderGroupStats.AverageVeterency}[Veterancy], {defenderGroupStats.Fortification}[FortificationShadowed]";
+				phasePresentation += Environment.NewLine + $"Att. {attackerCurrentPosture}, {attackerCount}[Population], {attackerGroupStats.AverageMoves}[MovementSpeed], {attackerGroupStats.AverageCombat}[CombatStrength], {(int)(attackerGroupStats.AverageHealth * 100)}%[Health], {attackerGroupStats.AverageVeterency}[Veterancy]";
+				phasePresentation += Environment.NewLine + $"Def. {defenderCurrentPosture}, {defenderCount}[Population], {defenderGroupStats.AverageMoves}[MovementSpeed], {defenderGroupStats.AverageCombat}[CombatStrength], {(int)(defenderGroupStats.AverageHealth * 100)}%[Health], {defenderGroupStats.AverageVeterency}[Veterancy], {defenderGroupStats.Fortification}[FortificationShadowed]";
 				battleExtension.BattleSummary += roundNum == 0 ? phasePresentation : Environment.NewLine + Environment.NewLine + phasePresentation;
 
 				// checks for abandonning battlefield before battle start
@@ -644,7 +653,7 @@ namespace Gedemon.Uchronia
 							battleExtension.BattleSummary += Environment.NewLine + $"Battle ended before combat with the attacker escaping: not pursued";
 							break;
 					}
-					if(canEscape)
+					if (canEscape)
 					{
 						ResolveEndRound(ref battleExtension, attackerInitialHealth, attackerStartRoundHealth, attackerUnits, defenderInitialHealth, defenderStartRoundHealth, defenderUnits, checkPosture: false);
 						break;
@@ -661,7 +670,7 @@ namespace Gedemon.Uchronia
 						case Posture.AllOutAttack:
 						case Posture.MobileAttack:
 							canEscape = defenderMobilityFactor >= attackerMobilityFactor;
-							if(canEscape)
+							if (canEscape)
 								battleExtension.BattleSummary += Environment.NewLine + $"Battle ended before combat with the defender escaping: {defenderMobilityFactor} vs {attackerMobilityFactor} [MovementSpeed][Veterancy]";
 							break;
 
@@ -683,6 +692,8 @@ namespace Gedemon.Uchronia
 				BattlePosture.ResolvePosture(ref defenderGroupStats, ref attackerGroupStats, ref battleExtension);
 
 				// attacker combats
+				attackerUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
+				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
 				bool flag = ResolveDamage(attackerUnits, attackerGroupStats.CombatModifier, defenderUnits, defenderGroupStats.CombatModifier, ref attackerCount, ref defenderCount, ref fortificationCount, ref totalFortificationDamage, isPreview, battle);
 				if (attackerCount == 0 || defenderCount == 0)
 				{
@@ -712,6 +723,8 @@ namespace Gedemon.Uchronia
 				}
 
 				// defender combats
+				attackerUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
+				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
 				if (!(flag | ResolveDamage(defenderUnits, defenderGroupStats.CombatModifier, attackerUnits, attackerGroupStats.CombatModifier, ref defenderCount, ref attackerCount, ref fortificationCount, ref totalFortificationDamage, isPreview, battle)))
 				{
 					break;
@@ -764,7 +777,7 @@ namespace Gedemon.Uchronia
 				if (BattlePosture.IsDefensive(attackerCurrentPosture) && BattlePosture.IsDefensive(defenderCurrentPosture))
 				{
 					battleExtension.BattleSummary += Environment.NewLine + $"Battle ended with both opponents in defensive posture";
-					ResolveEndRound(ref battleExtension, attackerInitialHealth, attackerStartRoundHealth, attackerUnits, defenderInitialHealth, defenderStartRoundHealth, defenderUnits, checkPosture : false);
+					ResolveEndRound(ref battleExtension, attackerInitialHealth, attackerStartRoundHealth, attackerUnits, defenderInitialHealth, defenderStartRoundHealth, defenderUnits, checkPosture: false);
 					break;
 				}
 
@@ -777,8 +790,9 @@ namespace Gedemon.Uchronia
 				}
 			}
 
-			// BATTLE RESULTS
+			#endregion
 
+			#region RESULTS
 			attackerGroupStats = new UnitGroupStats("Attacker");
 			defenderGroupStats = new UnitGroupStats("Defender");
 
@@ -792,41 +806,80 @@ namespace Gedemon.Uchronia
 			FixedPoint attackerLossRatio = FixedPoint.One - (attackerGroupStats.TotalHealth / attackerInitialHealth);
 			FixedPoint defenderLossRatio = FixedPoint.One - (defenderGroupStats.TotalHealth / defenderInitialHealth);
 
-			if (attackerCount > 0 && attackerLossRatio < defenderLossRatio)
+			if (attackerCount > 0 && defenderCount > 0)
 			{
-				if(defenderCount > 0)
-                {
-					if (battleExtension.DefenderPosture == Posture.Withdrawal || battleExtension.DefenderPosture == Posture.Retreat || battleExtension.DefenderPosture == Posture.Routed)
-						battleExtension.VictoryType = BattleVictoryType.Retreat;
-					else
-						battleExtension.VictoryType = BattleVictoryType.Attrition;
-				}
-                else
-                {
-					battleExtension.VictoryType = BattleVictoryType.Extermination;
-				}
-
-				__result = Amplitude.Mercury.Interop.BattleGroupRoleType.Attacker;
-				return false;
-			}
-			if (defenderCount > 0 && defenderLossRatio < attackerLossRatio)
-			{
-				if (attackerCount > 0)
+				// whatever the numbers, the defender leaving its position is a retreat and a win for the attacker 
+				if (battleExtension.DefenderPosture == Posture.Withdrawal || battleExtension.DefenderPosture == Posture.Retreat || battleExtension.DefenderPosture == Posture.Routed)
 				{
-					if (battleExtension.AttackerPosture == Posture.Retreat || battleExtension.AttackerPosture == Posture.Routed)
+					battleExtension.VictoryType = BattleVictoryType.Retreat;
+					__result = BattleGroupRoleType.Attacker;
+					battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Attacker wins the battle: Defender abandonning its position";
+					return false;
+				}
+				// whatever the numbers, the attacker retreating or being routed is a win for the defender 
+				if (battleExtension.AttackerPosture == Posture.Retreat || battleExtension.AttackerPosture == Posture.Routed)
+				{
+					battleExtension.VictoryType = IsAssault ? BattleVictoryType.Attrition : BattleVictoryType.Retreat;
+					__result = BattleGroupRoleType.Defender;
+					battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Defender wins the battle: Attacker retreating or routed";
+					return false;
+				}
+			}
+
+			if (attackerCount > 0 && (attackerLossRatio < defenderLossRatio * QJM.MediumReducingModifier || defenderCount == 0))
+			{
+				if (defenderCount > 0)
+				{
+					if (battleExtension.DefenderPosture == Posture.Withdrawal || battleExtension.DefenderPosture == Posture.Retreat || battleExtension.DefenderPosture == Posture.Routed)
+					{
 						battleExtension.VictoryType = BattleVictoryType.Retreat;
+						battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Attacker wins the battle: Defender abandonning its position";
+
+					}
 					else
+					{
 						battleExtension.VictoryType = BattleVictoryType.Attrition;
+						battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Attacker wins the battle by Attrition: -{(int)(attackerLossRatio * 100)}% vs -{(int)(defenderLossRatio * 100)}% [Health]";
+					}
 				}
 				else
 				{
 					battleExtension.VictoryType = BattleVictoryType.Extermination;
+					battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Attacker wins the battle by annihilation of the opponent.";
 				}
-				__result = Amplitude.Mercury.Interop.BattleGroupRoleType.Defender;
+
+				__result = BattleGroupRoleType.Attacker;
 				return false;
 			}
-			__result = Amplitude.Mercury.Interop.BattleGroupRoleType.None;
+			if (defenderCount > 0 && (defenderLossRatio < attackerLossRatio * QJM.MediumReducingModifier || attackerCount == 0))
+			{
+				if (attackerCount > 0)
+				{
+					if (battleExtension.AttackerPosture == Posture.Retreat || battleExtension.AttackerPosture == Posture.Routed)
+					{
+						battleExtension.VictoryType = IsAssault ? BattleVictoryType.Attrition : BattleVictoryType.Retreat;
+						battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Defender wins the battle: Attacker retreating or routed";
+					}
+					else
+					{
+						battleExtension.VictoryType = BattleVictoryType.Attrition;
+						battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Defender wins the battle by Attrition: -{(int)(defenderLossRatio * 100)}% vs -{(int)(attackerLossRatio * 100)}% [Health]";
+					}
+				}
+				else
+				{
+					battleExtension.VictoryType = BattleVictoryType.Extermination;
+					battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Defender wins the battle by annihilation of the opponent.";
+				}
+				__result = BattleGroupRoleType.Defender;
+				return false;
+			}
+
+			battleExtension.BattleSummary += Environment.NewLine + $"No victory, Battle Total Casualties: Attacker = -{(int)(attackerLossRatio * 100)}% [Health] | Defender = -{(int)(defenderLossRatio * 100)}% [Health]";
+			__result = BattleGroupRoleType.None;
 			return false;
+			#endregion
+
 		}
 
 		public static bool ResolveDamage(ListOfStruct<UnitSimplifiedData> attackerUnits, FixedPoint attackerModifier, ListOfStruct<UnitSimplifiedData> defenderUnits, FixedPoint defenderModifier, ref int attackerCount, ref int defenderCount, ref int fortificationCount, ref FixedPoint totalFortificationDamage, bool isPreview, Battle battle)
@@ -840,7 +893,7 @@ namespace Gedemon.Uchronia
 			BattleExtension battleExtension = BattleSaveExtension.GetExtension(battle.GUID);
 			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ResolveDamage: attackerModifier = {attackerModifier}, defenderModifier = {defenderModifier} ");
 
-			FixedPoint damageDivider = 400; // was 200
+			FixedPoint damageDivider = 800; // was 200
 			bool result = false;
 			for (int i = 0; i < attackerUnits.Length; i++)
 			{
@@ -873,7 +926,7 @@ namespace Gedemon.Uchronia
 					FixedPoint defenderStrength = defender.CombatStrength * defender.HealthRatio * defenderModifier;
 
 
-					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ResolveDamage (str*healthRatio*mod) attacker[i] vs defender[j] : attStr = {attacker.CombatStrength}*{attacker.HealthRatio}*{attackerModifier} = {attackerStrength} , defStr = {defender.CombatStrength}*{defender.HealthRatio}*{defenderModifier} = {defenderStrength}");
+					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ResolveDamage (str*healthRatio*mod) attacker[{attacker.GUID}] vs defender[{defender.GUID}] : attStr = {attacker.CombatStrength}*{attacker.HealthRatio}*{attackerModifier} = {attackerStrength} , defStr = {defender.CombatStrength}*{defender.HealthRatio}*{defenderModifier} = {defenderStrength}");
 
 					Damage damages = BattleAbilityHelper.GetDamages(attackerStrength, defenderStrength);
 					FixedPoint damageToDefender = (damages.MaximumDamage + damages.MinimumDamage) / damageDivider;

@@ -52,11 +52,6 @@ namespace Gedemon.Uchronia
 			bool capitalChanged = false; // the Capital hasn't been changed yet
 			bool needNewCapital = false; // We need a new Capital (and we've not found it yet)
 
-			if ((!isHuman) && Uchronia.NoTerritoryLossForAI())
-			{
-				keepOnlyCultureTerritory = false;
-			}
-
 			if (majorEmpire.FactionDefinition.Name != nextFactionName)
 			{
 				if (majorEmpire.DepartmentOfDevelopment.CurrentEraIndex != 0 && keepOnlyCultureTerritory)

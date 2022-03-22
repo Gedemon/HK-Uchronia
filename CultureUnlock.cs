@@ -5,6 +5,7 @@ using Amplitude.Mercury;
 using Amplitude.Mercury.Data.Simulation;
 using Amplitude.Mercury.Interop;
 using Amplitude.Mercury.Presentation;
+using Amplitude.Mercury.Sandbox;
 using Amplitude.Mercury.Simulation;
 
 namespace Gedemon.Uchronia
@@ -698,7 +699,6 @@ namespace Gedemon.Uchronia
 
 			return CultureUnlock.RefMapContinentListFromContinent[territory.ContinentIndex].Contains(territoryData.Continent);
 		}
-
 		public static void PrepareForGiantEarthReference(World currentWorld)
         {
 
@@ -1163,7 +1163,6 @@ namespace Gedemon.Uchronia
 			}
 
 		}
-
 		public static void GetBestReferenceFromGiantEarthMap(Territory territory, World currentWorld, ref List<int> refTerritoriesPaired, out int bestDistance, out int bestIndex, out string bestName, bool IgnoreIsland = false)
         {
 
@@ -1212,7 +1211,6 @@ namespace Gedemon.Uchronia
 				}
 			}
 		}
-
 		public static void UpdateTerritoryListFromReference(IDictionary<string, List<int>> listFactionTerritories)
         {
 			List<string> keyList = new List<string>(listFactionTerritories.Keys);
@@ -1230,7 +1228,6 @@ namespace Gedemon.Uchronia
 				listFactionTerritories[key] = territoryList;
 			}
 		}
-
 		public static void BuildListTerritories()
         {
 			Diagnostics.LogWarning($"[Gedemon] [CultureUnlock] building territoriesWithMinorFactions[] and territoriesWithMajorEmpires[]");
@@ -1284,7 +1281,6 @@ namespace Gedemon.Uchronia
 				}
 			}
 		}
-
 		public static bool ValidateGiantEarthReference(World currentWorld)
 		{
 			int numTerritories = currentWorld.Territories.Length;
@@ -1328,7 +1324,6 @@ namespace Gedemon.Uchronia
 
 			return true;
         }
-
 		public static void InitializeTCL(World currentWorld)
 		{
 
@@ -1381,7 +1376,6 @@ namespace Gedemon.Uchronia
 			}
 
 		}
-
 		public static bool ValidateMapTCL()
         {
 			BuildListTerritories();
@@ -1404,36 +1398,26 @@ namespace Gedemon.Uchronia
 		{
 			return TerritoriesWithMinorFactions[territoryIndex].Count > 0;
 		}
-
 		public static bool IsMinorFactionPosition(int territoryIndex, string minorFactionName)
 		{
 			return TerritoriesWithMinorFactions[territoryIndex].Contains(minorFactionName);
 		}
-
 		public static List<string> GetListMinorFactionsForTerritory(int territoryIndex)
 		{
 			return TerritoriesWithMinorFactions[territoryIndex];
 		}
-
 		public static bool HasAnyMajorEmpirePosition(int territoryIndex)
 		{
 			return TerritoriesUnlockingMajorEmpires[territoryIndex].Count > 0;
 		}
-
 		public static bool IsMajorEmpirePosition(int territoryIndex, string majorEmpireName)
 		{
 			return TerritoriesUnlockingMajorEmpires[territoryIndex].Contains(majorEmpireName);
 		}
-		public static bool IsMajorEmpirePosition(int territoryIndex, StaticString majorEmpireName)
-		{
-			return TerritoriesUnlockingMajorEmpires[territoryIndex].Contains(majorEmpireName.ToString());
-		}
-
 		public static List<string> GetListMajorEmpiresForTerritory(int territoryIndex)
         {
 			return TerritoriesUnlockingMajorEmpires[territoryIndex];
 		}
-
 		public static bool HasMajorTerritories(string factionName)
 		{
 			if(ListMajorEmpireTerritories.TryGetValue(factionName, out List<int> territories))
@@ -1492,7 +1476,6 @@ namespace Gedemon.Uchronia
 			}
 			return false;
 		}
-
 		public static bool IsNextEraUnlock(int territoryIndex, int currentEraIndex)
 		{
 
@@ -1535,16 +1518,61 @@ namespace Gedemon.Uchronia
 			return false;
         }
 
+		public static bool TryGetAvailableMajorFactionsForTerritory(int territoryIndex, out StaticString factionName)
+		{
+			factionName = new StaticString("");
+			List<string> listMajorEmpires = CultureUnlock.TerritoriesUnlockingMajorEmpires[territoryIndex];
+
+			//Diagnostics.LogWarning($"[Gedemon] IsNextEraUnlock listMajorEmpires exists = {listMajorEmpires != null}");
+
+			if (listMajorEmpires != null)
+			{
+				//Diagnostics.LogWarning($"[Gedemon] IsNextEraUnlock listMajorEmpires count = {listMajorEmpires.Count}");
+
+				if (listMajorEmpires.Count > 0)
+				{
+					int currentEraIndex = Sandbox.Timeline.GetGlobalEraIndex();
+					foreach (string keyName in listMajorEmpires)
+					{
+						bool anyTerritory = CultureUnlock.HasNoCapitalTerritory(keyName);
+
+						//Diagnostics.LogWarning($"[Gedemon] IsNextEraUnlock check faction = {keyName}, anyTerritory = {anyTerritory}");
+
+						if (CultureUnlock.IsCapitalTerritory(keyName, territoryIndex, anyTerritory))
+						{
+							StaticString candidateFactionName = new StaticString(keyName);
+
+							if (CurrentGame.Data.IsFallenEmpire(candidateFactionName))
+								continue;
+
+							FactionDefinition factionDefinition = Amplitude.Mercury.Utils.GameUtils.GetFactionDefinition(candidateFactionName);
+
+							if (factionDefinition == null)
+								continue;
+
+							//Diagnostics.LogError($"[Gedemon] IsNextEraUnlock for {GetTerritoryName(territoryIndex)} and {factionName} (local player era = {currentEraIndex}, next Era = {nextEraIndex}, faction era = {factionDefinition.EraIndex})");
+
+							if (factionDefinition.EraIndex == currentEraIndex && Sandbox.CivilizationsManager.IsLockedBy(factionDefinition.Name) == -1)
+							{
+								factionName = candidateFactionName;
+								return true;
+							}
+						}
+					}
+				}
+			}
+
+			return false;
+		}
+
 		public static bool IsUnlockedByPlayerSlot(string civilizationName, int empireIndex)
 		{
 			return ListSlots.ContainsKey(civilizationName) && ListSlots[civilizationName].Contains(empireIndex);
 		}
-
 		public static bool IsFirstEraBackupCivilization(string civilizationName)
 		{
-			return FirstEraBackup.Contains(civilizationName);
+			return false; //FirstEraBackup.Contains(civilizationName);
 		}
-
 		public static bool IsNomadCulture(string civilizationName)
 		{
 			return NomadCultures.Contains(civilizationName);
@@ -1554,7 +1582,6 @@ namespace Gedemon.Uchronia
 		{
 			return NoCapitalTerritory.Contains(civilizationName);
 		}
-
 		public static List<int> GetListTerritories(string factionName)
 		{
 			if (Uchronia.KeepOnlyCoreTerritories())
@@ -1581,17 +1608,14 @@ namespace Gedemon.Uchronia
 				return new List<int>();
 			}
 		}
-
 		public static int GetCapitalTerritoryIndex(string civilizationName)
 		{
 			return ListMajorEmpireTerritories[civilizationName][0];
 		}
-
 		public static bool TerritoryHasName(int territoryIndex)
 		{
 			return TerritoryNames.ContainsKey(territoryIndex);
 		}
-
 		public static string GetTerritoryName(int territoryIndex)
 		{
 			if (TerritoryNames.TryGetValue(territoryIndex, out string name))
@@ -1604,17 +1628,14 @@ namespace Gedemon.Uchronia
 		{
 			return TerritoryNames[territoryIndex];
 		}
-
 		public static bool ContinentHasName(int continentIndex)
 		{
 			return ContinentNames.ContainsKey(continentIndex);
 		}
-
 		public static string GetContinentName(int continentIndex)
 		{
 			return ContinentNames[continentIndex];
 		}
-
 		public static Hexagon.OffsetCoords GetExtraStartingPosition(int empireIndex, bool OldWorldOnly)
 		{
 			if(OldWorldOnly)
@@ -1626,12 +1647,10 @@ namespace Gedemon.Uchronia
 				return ExtraPositionsNewWorld.ContainsKey(empireIndex) ? ExtraPositionsNewWorld[empireIndex] : ExtraPositions[empireIndex];
 			}
 		}
-
 		public static bool HasExtraStartingPosition(int empireIndex, bool OldWorldOnly)
 		{
 			return (ExtraPositions.ContainsKey(empireIndex) || ExtraPositionsNewWorld.ContainsKey(empireIndex));
 		}
-
 		public static bool UseTrueCultureLocation()
 		{
 			if (IsCompatibleMap() && Uchronia.IsEnabled())
@@ -1703,7 +1722,6 @@ namespace Gedemon.Uchronia
 				ContinentNames.Add(index, name);
 			}
 		}
-
 		public static void UpdateListExtraPositions(int index, Hexagon.OffsetCoords position)
 		{
 			if (ExtraPositions.ContainsKey(index))
@@ -1740,7 +1758,6 @@ namespace Gedemon.Uchronia
 				NomadCultures.Add(factionName);
 			}
 		}
-
 		public static void logEmpiresTerritories()
 		{
 			foreach (KeyValuePair<string, List<int>> kvp in ListMajorEmpireTerritories)

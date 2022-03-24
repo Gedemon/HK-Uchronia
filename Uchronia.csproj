@@ -160,6 +160,7 @@
     <Compile Include="Assembly-CSharp\GamePatch.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\MajorEmpirePatch.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\MinorFactionPatch.cs" />
+    <Compile Include="Amplitude.Mercury.AI.Brain\NextFactionChoice_patch.cs" />
     <Compile Include="TradeRoute.cs" />
     <Compile Include="ModLoading.cs" />
     <Compile Include="Types.cs" />

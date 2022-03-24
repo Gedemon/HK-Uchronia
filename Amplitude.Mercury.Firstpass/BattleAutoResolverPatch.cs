@@ -169,9 +169,9 @@ namespace Gedemon.Uchronia
 			return Name == "Attacker";
         }
 
-		public void AddUnitData(ListOfStruct<UnitSimplifiedData> listOfunits)
+		public void AddUnitData(ListOfStruct<UnitSimplifiedData> listOfunits, bool isRetreating = false)
 		{
-			Diagnostics.LogWarning($"[Gedemon] UnitGroupStats: AddUnitData from {Name}");
+			//Diagnostics.LogWarning($"[Gedemon] UnitGroupStats: AddUnitData from {Name}");
 
 			for (int j = 0; j < listOfunits.Length; j++)
 			{
@@ -179,17 +179,17 @@ namespace Gedemon.Uchronia
 
 				if (unitData.IsFortification)
 				{
-					Diagnostics.Log($"[Gedemon] unit #{j}: Fortification = {unitData.HealthRatio}");
+					//Diagnostics.Log($"[Gedemon] unit #{j}: Fortification = {unitData.HealthRatio}");
 					Fortification += unitData.HealthRatio;
 				}
 				else
 				{
-					Diagnostics.Log($"[Gedemon] unit #{j}: CombatStrength {unitData.CombatStrength}, HealthRatio {unitData.HealthRatio}, move = {(unitData.IsOnWater ? unitData.Unit.NavalSpeed.Value : unitData.Unit.LandSpeed.Value)}, XP = {unitData.ExperienceToReceive + unitData.Unit.Experience}, Fortification = {(unitData.IsFortification ? unitData.HealthRatio : 0)}");
+					//Diagnostics.Log($"[Gedemon] unit #{j}: CombatStrength {unitData.CombatStrength}, HealthRatio {unitData.HealthRatio}, move = {(unitData.IsOnWater ? unitData.Unit.NavalSpeed.Value : unitData.Unit.LandSpeed.Value)}, XP = {unitData.ExperienceToReceive + unitData.Unit.Experience}, has RetreatedUnitStatusName = {unitData.Unit.HasStatus(DepartmentOfDefense.RetreatedUnitStatusName)}");
 					NumUnits++;
 					TotalCombat += unitData.CombatStrength * unitData.HealthRatio;
 					TotalHealth += unitData.HealthRatio;
 					FixedPoint baseMoves = unitData.IsOnWater ? unitData.Unit.NavalSpeed.Value : unitData.Unit.LandSpeed.Value;
-					TotalMoves += unitData.Unit.HasStatus(DepartmentOfDefense.RetreatedUnitStatusName) ? (FixedPoint)0.5* baseMoves : baseMoves;
+					TotalMoves += isRetreating ? (FixedPoint)0.5* baseMoves : baseMoves; // unitData.Unit.HasStatus(DepartmentOfDefense.RetreatedUnitStatusName)
 					TotalVeterency += unitData.Unit.VeterancyLevel.Value * unitData.HealthRatio;
 					TotalExperience += unitData.ExperienceToReceive + unitData.Unit.Experience;
 				}
@@ -279,6 +279,7 @@ namespace Gedemon.Uchronia
 			_ = MercuryPreferences.VerboseInstantResolveLogs;
 
 			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] AutoResolve Postures (after): attacker = {battleExtension.AttackerPosture}, defender = {battleExtension.DefenderPosture}, victoryType = {battleExtension.VictoryType}, winner = {workingContext.Winner}");
+			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] AutoResolve Postures (after): winner battleGroup.Role = {battleGroup.Role} empire #{battleGroup.LeaderEmpireIndex}, loser battleGroup2.Role = {battleGroup2.Role} empire #{battleGroup2.LeaderEmpireIndex}, was sortie = {flag}");
 
 			if (workingContext.Winner == Amplitude.Mercury.Interop.BattleGroupRoleType.Attacker)
 			{
@@ -307,6 +308,9 @@ namespace Gedemon.Uchronia
 			{
 				FixedPoint combatStrength = left.CombatStrength * left.HealthRatio;
 				num = combatStrength.CompareTo(right.CombatStrength * right.HealthRatio);
+
+				//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] CompareUnitByStrength compare left[{left.CombatStrength}x{left.HealthRatio}] to right[{right.CombatStrength}x{right.HealthRatio}] = {num}");
+
 				if (num == 0)
 				{
 					num = left.GUID.CompareTo(right.GUID);
@@ -331,10 +335,13 @@ namespace Gedemon.Uchronia
 				return true;
 			}
 
-			bool IsAssault = battle.Siege != null && battle.Siege.SiegeState != SiegeStates.Sortie;
-
 			BattleExtension battleExtension = BattleSaveExtension.GetExtension(battle.GUID);
-			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : battle GUID = {battle.GUID}, fortificationCount = {fortificationCount}, IsAssault = {IsAssault}");
+
+			bool IsAssault = battle.Siege != null && battle.Siege.SiegeState != SiegeStates.Sortie;
+			bool IsSortie = battle.Siege != null && battle.Siege.SiegeState == SiegeStates.Sortie;
+			bool IsRetreating = battleExtension.DefenderWasRetreating;
+
+			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : battle GUID = {battle.GUID}, fortificationCount = {fortificationCount}, IsAssault = {IsAssault}, DefenderWasRetreating = {IsRetreating}");
 
 			int attackerCount = attackerUnits.Length;
 			int defenderCount = defenderUnits.Length;
@@ -345,7 +352,7 @@ namespace Gedemon.Uchronia
 			attackerGroupStats.AddUnitData(attackerUnits);
 
 			UnitGroupStats defenderGroupStats = new UnitGroupStats("Defender");
-			defenderGroupStats.AddUnitData(defenderUnits);
+			defenderGroupStats.AddUnitData(defenderUnits, IsRetreating);
 
 			attackerGroupStats.ComputeStats();
 			defenderGroupStats.ComputeStats();
@@ -362,12 +369,19 @@ namespace Gedemon.Uchronia
 				Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerEmpire with {battleExtension.AttackerPosture} called RandomHelper.Next [0-100]: RNG = {postureRNG100}, ratioRNG = {ratioRNG}");
 				if (HasAnimal(attackerUnits))
 				{
-					battleExtension.AttackerPosture = postureRNG100 > 50 ? Posture.Pursuit : Posture.AllOutAttack;
+					battleExtension.AttackerPosture = postureRNG100 > 50 ? Posture.Pursuit : postureRNG100 > 25 ? Posture.AllOutAttack : Posture.DeliberateAttack;
 					Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerAnimal AI chosed {battleExtension.AttackerPosture}");
 					goto DecisionTaken;
 				}
 				else
 				{
+					if (HasAnimal(defenderUnits))
+					{
+						battleExtension.AttackerPosture = postureRNG100 > 25 ? Posture.Pursuit : Posture.AllOutAttack;
+						Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerEmpire AI chosed {battleExtension.AttackerPosture} against animals");
+						goto DecisionTaken;
+					}
+
 					// logical decisions
 					FixedPoint logicalDecisionValue = (attackerGroupStats.AverageVeterency * 10) + 50; // [50-80]
 					if (logicalDecisionValue >= postureRNG100)
@@ -612,7 +626,7 @@ namespace Gedemon.Uchronia
 					attackerGroupStats.GroupPosture = battleExtension.AttackerPosture;
 
 					defenderGroupStats = new UnitGroupStats("Defender");
-					defenderGroupStats.AddUnitData(defenderUnits);
+					defenderGroupStats.AddUnitData(defenderUnits, IsRetreating);
 					defenderGroupStats.GroupPosture = battleExtension.DefenderPosture;
 
 					attackerGroupStats.ComputeStats();
@@ -797,7 +811,7 @@ namespace Gedemon.Uchronia
 			defenderGroupStats = new UnitGroupStats("Defender");
 
 			attackerGroupStats.AddUnitData(attackerUnits);
-			defenderGroupStats.AddUnitData(defenderUnits);
+			defenderGroupStats.AddUnitData(defenderUnits, IsRetreating);
 
 			attackerGroupStats.ComputeStats();
 			defenderGroupStats.ComputeStats();
@@ -838,8 +852,16 @@ namespace Gedemon.Uchronia
 					}
 					else
 					{
-						battleExtension.VictoryType = BattleVictoryType.Attrition;
-						battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Attacker wins the battle by Attrition: -{(int)(attackerLossRatio * 100)}% vs -{(int)(defenderLossRatio * 100)}% [Health]";
+						if(IsSortie)
+						{
+							battleExtension.VictoryType = BattleVictoryType.Retreat;
+							battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Attacker breaks the siege: -{(int)(attackerLossRatio * 100)}% vs -{(int)(defenderLossRatio * 100)}% [Health]";
+						}
+                        else
+						{
+							battleExtension.VictoryType = BattleVictoryType.Attrition;
+							battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Attacker wins the battle by Attrition: -{(int)(attackerLossRatio * 100)}% vs -{(int)(defenderLossRatio * 100)}% [Health]";
+						}
 					}
 				}
 				else
@@ -1057,6 +1079,10 @@ namespace Gedemon.Uchronia
 			for (int j = 0; j < listUnits.Length; j++)
 			{
 				UnitSimplifiedData unitData = listUnits.Data[j];
+
+				if (unitData.IsFortification)
+					continue;
+
 				if (unitData.Unit.IsAnimal())
 					return true;
 			}
@@ -1125,14 +1151,13 @@ namespace Gedemon.Uchronia
 
 			return currentPosture;
 		}
-
 		public static void ResolveEndRound(ref BattleExtension battleExtension, FixedPoint attackerInitialHealth, FixedPoint attackerStartRoundHealth, ListOfStruct<UnitSimplifiedData> attackerUnits, FixedPoint defenderInitialHealth, FixedPoint defenderStartRoundHealth, ListOfStruct<UnitSimplifiedData> defenderUnits, bool checkPosture = true)
 		{
 			UnitGroupStats attackerGroupStats = new UnitGroupStats("Attacker");
 			UnitGroupStats defenderGroupStats = new UnitGroupStats("Defender");
 
 			attackerGroupStats.AddUnitData(attackerUnits);
-			defenderGroupStats.AddUnitData(defenderUnits);
+			defenderGroupStats.AddUnitData(defenderUnits, battleExtension.DefenderWasRetreating);
 
 			attackerGroupStats.ComputeStats();
 			defenderGroupStats.ComputeStats();

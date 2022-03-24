@@ -58,7 +58,7 @@ namespace Gedemon.Uchronia
 					}
 				}
 
-				if (CultureUnlock.TryGetAvailableMajorFactionsForTerritory(territory.Index, out StaticString majorFactionName))
+				if (CultureUnlock.TryGetEraAvailableMajorFactionsForTerritory(territory.Index, out StaticString majorFactionName, notTakenOnly: true, checkAllTerritories: true))
 				{
 					foundFaction = true;
 				}
@@ -165,11 +165,33 @@ namespace Gedemon.Uchronia
 			if (CultureUnlock.UseTrueCultureLocation())
 			{
 
-				//Diagnostics.Log($"[Gedemon] in MinorFactionManager, IsTerritoryValidForSpawnFaction for {CultureUnlock.GetTerritoryName(territory.Index)}, MinorFactionManager Era = ({__instance.CurrentMinorFactionEraDefinition.EraIndex}) ");
+				//Diagnostics.LogError($"[Gedemon] in MinorFactionManager, IsTerritoryValidForSpawnFaction for {CultureUnlock.GetTerritoryName(territory.Index)}, MinorFactionManager Era = ({__instance.CurrentMinorFactionEraDefinition.EraIndex}) ");
 
 				if (__instance.CurrentMinorFactionEraDefinition.EraIndex == 0)
 				{
 					return true; // no limits for neolithic spawn (animals)
+				}
+
+				bool isAdjacentAnotherMinor = false;
+				if (__instance.CurrentMinorFactionEraDefinition.EraIndex < 2) // prevent adjacent spawns in ancient era
+				{
+					for (int j = 0; j < territory.AdjacentTerritories.Length; j++)
+					{
+						int adjacentTerritoryIndex = territory.AdjacentTerritories[j];
+						Territory adjacentTerritory = Amplitude.Mercury.Sandbox.Sandbox.World.Territories[adjacentTerritoryIndex];
+						District mainDistrict = adjacentTerritory.AdministrativeDistrict;
+						if (mainDistrict != null)
+						{
+							//Diagnostics.Log($"[Gedemon] MinorFactionManager, IsTerritoryValidForSpawnFaction for {CultureUnlock.GetTerritoryName(territory.Index)}, has district {mainDistrict.DistrictType}");
+							if (mainDistrict.Empire is MinorEmpire)
+							{
+								//isAdjacentAnotherMinor = true;
+								//break;
+								__result = false;
+								return false;
+							}
+						}
+					}
 				}
 
 				int numAvailablePeacefulFaction = __instance.PeacefulHumanSpawner.availableMinorFactionDefinitions.Count;
@@ -199,6 +221,9 @@ namespace Gedemon.Uchronia
 					//Diagnostics.Log($"[Gedemon] IsMinorFactionPosition for {factionName} in territory = {CultureUnlock.IsMinorFactionPosition(territory.Index, factionName)}");
 					if (CultureUnlock.IsMinorFactionPosition(territory.Index, factionName))
 					{
+						//if (CultureUnlock.GetListTerritoriesForMinorFaction(factionName).Count >= 3 && isAdjacentAnotherMinor)
+						//	continue;
+
 						Diagnostics.LogWarning($"[Gedemon] in MinorFactionManager, IsTerritoryValidForSpawnFaction for {CultureUnlock.GetTerritoryName(territory.Index)}, Found ({factionName}) !");
 						return true;
 					}
@@ -223,8 +248,7 @@ namespace Gedemon.Uchronia
 						}
 					}
 				}
-
-				if (CultureUnlock.TryGetAvailableMajorFactionsForTerritory(territory.Index, out StaticString majorFactionName))
+				if (CultureUnlock.TryGetEraAvailableMajorFactionsForTerritory(territory.Index, out StaticString majorFactionName, notTakenOnly : true, checkAllTerritories : true))
                 {
 					return true;
                 }
@@ -256,7 +280,9 @@ namespace Gedemon.Uchronia
 					}
 					//*
 					int count = minorEmpire.RelationsToMajor.Count;
-					FixedPoint lifeRatio = (FixedPoint)0.5;
+					FixedPoint numSleepingMajor = CultureChange.GetNumSleepingMajor();
+					FixedPoint factor = 3;
+					FixedPoint lifeRatio = numSleepingMajor > 3 ? factor / numSleepingMajor : (FixedPoint)0.80;
 					bool hasEnoughLifeTime = (SandboxManager.Sandbox.Turn - minorEmpire.SpawnTurn) > minorEmpire.RemainingLifeTime * lifeRatio;
 					PatronageDefinition patronageDefinition = minorEmpire.PatronageDefinition;
 					Diagnostics.LogWarning($"[Gedemon] Check Minor Faction {minorEmpire.FactionDefinition.name} ID#{minorEmpire.Index}, Era={minorEmpire.EraIndex}, Status={minorEmpire.MinorFactionStatus}, HomeStatus={minorEmpire.MinorEmpireHomeStatus}, RemainingLife={minorEmpire.RemainingLifeTime}, Spawn={minorEmpire.SpawnTurn}, Life={SandboxManager.Sandbox.Turn - minorEmpire.SpawnTurn}, hasEnoughLifeTime={hasEnoughLifeTime}, lifeRatio = {lifeRatio}, FirstPatron ID#{minorEmpire.RankedMajorEmpireIndexes[Amplitude.Mercury.Sandbox.Sandbox.NumberOfMajorEmpires - 1]}  ");
@@ -393,6 +419,7 @@ namespace Gedemon.Uchronia
 
 							newEmpire.DepartmentOfForeignAffairs.AssimilateMinorEmpire(minorEmpire);
 
+							CultureChange.MajorAssimilateAllMinorFromFaction(newEmpire, newfaction.Name);
 							CultureChange.UpdateDistrictVisuals(newEmpire);
 							CultureChange.SetFactionSymbol(newEmpire);
 							CultureChange.FinalizeMajorEmpireSpawning(newEmpire);
@@ -416,7 +443,7 @@ namespace Gedemon.Uchronia
 		public static bool SetMinorFactionDead(BaseHumanMinorFactionSpawner<BaseHumanSpawnerDefinition> __instance, MinorEmpire minorEmpire)
 		{
 			//FactionDefinition factionDefinition = minorEmpire.FactionDefinition;
-			Diagnostics.LogWarning($"[Gedemon] in SetMinorFactionDead, Prefix, IsRestoreDestroyedTradeRoutes = {TradeRoute.IsRestoreDestroyedTradeRoutes}");
+			Diagnostics.LogWarning($"[Gedemon] in SetMinorFactionDead, Prefix, minorEmpire#{minorEmpire.Index}, {minorEmpire.FactionDefinition.Name}, IsRestoreDestroyedTradeRoutes = {TradeRoute.IsRestoreDestroyedTradeRoutes}");
 			if (CultureUnlock.UseTrueCultureLocation())
 			{
 				if(TradeRoute.IsRestoreDestroyedTradeRoutes)

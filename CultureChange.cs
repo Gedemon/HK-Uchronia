@@ -73,6 +73,10 @@ namespace Gedemon.Uchronia
 					EmpiresPerEra.Add(empireEraIndex, new List<MajorEmpire> { majorEmpire });
 				}
 			}
+
+			if(numAwake==0)
+				return;
+
 			Diagnostics.LogWarning($"[Gedemon] [CultureChange] numAwake = {numAwake}, maxAwake = {maxAwake}, maxEra = {maxEra}, minEra = {minEra}, EmpiresPerEra[minEra].Count = {EmpiresPerEra[minEra].Count}, lastEmpires = {lastEmpires}");
 			if (numAwake >= maxAwake && maxEra > minEra && EmpiresPerEra[minEra].Count <= lastEmpires)
 			{
@@ -448,6 +452,7 @@ namespace Gedemon.Uchronia
 						// (re)Set diplomatic relation
 						CultureChange.SetDiplomaticRelationFromEvolution(majorEmpire, oldEmpire);
 						CultureChange.FinalizeMajorEmpireSpawning(oldEmpire);
+						//CultureChange.MajorAssimilateAllMinorFromFaction(oldEmpire, oldEmpire.FactionDefinition.Name); // not here, we are maybe setting rebels with that faction name in outside territories !
 					}
 				}
 				else
@@ -915,6 +920,18 @@ namespace Gedemon.Uchronia
 			return freeEmpire;
 
 		}
+		public static int GetNumSleepingMajor()
+        {
+			int numSleeping = 0;
+			int numMajor = Amplitude.Mercury.Sandbox.Sandbox.MajorEmpires.Length;
+			for (int i = 0; i < numMajor; i++)
+			{
+				MajorEmpire majorEmpire = Sandbox.MajorEmpires[i];
+				if (IsSleepingEmpire(majorEmpire))
+					numSleeping++;
+			}
+			return numSleeping;
+		}
 		public static bool TryInitializeFreeMajorEmpireToReplace(MajorEmpire majorEmpire, out MajorEmpire oldEmpire)
 		{
 			Diagnostics.LogWarning($"[Gedemon] TryInitializeFreeMajorEmpireToReplace for {majorEmpire.FactionDefinition.Name}...");
@@ -1266,6 +1283,24 @@ namespace Gedemon.Uchronia
 				}
 			}
 		}
+		public static void MajorAssimilateAllMinorFromFaction(MajorEmpire majorEmpire, StaticString factionName)
+		{
+			Diagnostics.LogError($"[Gedemon] MajorAssimilateAllMinorFromFaction majorEmpire id# {majorEmpire.Index}, factionName = {factionName}");
+			int numberOfMinorEmpires = Amplitude.Mercury.Sandbox.Sandbox.NumberOfMinorEmpires;
+			for (int i = 0; i < numberOfMinorEmpires; i++)
+			{
+				MinorEmpire minorEmpire = Amplitude.Mercury.Sandbox.Sandbox.MinorEmpires[i];
+				if (!minorEmpire.IsAlive)
+				{
+					continue;
+				}
+				if(minorEmpire.FactionDefinition.Name == factionName)
+				{
+					Diagnostics.Log($"[Gedemon] Assimilating minorEmpire id# {minorEmpire.Index}");
+					majorEmpire.DepartmentOfForeignAffairs.AssimilateMinorEmpire(minorEmpire);
+				}
+			}
+        }
 	}
 
 	class SettlementRefund
@@ -1398,12 +1433,12 @@ namespace Gedemon.Uchronia
 			{
 				if (improvement.BuiltImprovements != null)
 				{
-					Diagnostics.LogWarning($"[Gedemon] Family = {improvement.Family}");
+					//Diagnostics.LogWarning($"[Gedemon] Family = {improvement.Family}");
 					foreach (SettlementImprovementDefinition definition in improvement.BuiltImprovements)
 					{
-						Diagnostics.LogWarning($"[Gedemon] Improvement {definition.Name}");
+						//Diagnostics.LogWarning($"[Gedemon] Improvement {definition.Name}");
 						FixedPoint cost = definition.ProductionCostDefinition.GetCost(majorEmpire);
-						Diagnostics.LogWarning($"[Gedemon] Cost = {cost}");
+						//Diagnostics.LogWarning($"[Gedemon] Cost = {cost}");
 						productionRefund += cost * baseProductionFactor;
 					}
 				}

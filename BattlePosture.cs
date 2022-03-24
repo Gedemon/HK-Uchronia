@@ -59,6 +59,7 @@ namespace Gedemon.Uchronia
 		public Posture DefenderPosture { get; set; }
 		public string BattleSummary { get; set; }
 		public int RoundNum { get; set; }
+		public bool DefenderWasRetreating { get; set; }
 
 		public BattleVictoryType VictoryType { get; set; } 
 
@@ -837,7 +838,7 @@ namespace Gedemon.Uchronia
 
 		[HarmonyPostfix]
 		[HarmonyPatch(nameof(Initialize))]
-		public static void Initialize(Battle __instance)
+		public static void Initialize(Battle __instance, ISimulationTargetToBattle attacker, ISimulationTargetToBattle defender)
 		{
 			Diagnostics.LogWarning($"[Gedemon][Battle] Initialize: GUID  = {__instance.GUID}");
 
@@ -850,10 +851,22 @@ namespace Gedemon.Uchronia
 				Diagnostics.Log($"[Gedemon][Battle] DefenderGroup:  {battleContender.EmpireIndex}");
 			}
 
-			BattleExtension battleExtension = new BattleExtension();
-			BattleSaveExtension.BattleExensions.Add(__instance.GUID, battleExtension);
 
 			if (!BattlePosture.UsePosture) { return; }
+
+			BattleExtension battleExtension = new BattleExtension();
+
+			District district = defender as District;
+			if (district == null)
+			{
+				Army army = defender as Army;
+				if (army.HasUnitStatus(DepartmentOfDefense.RetreatedUnitStatusName))
+				{
+					battleExtension.DefenderWasRetreating = true;
+				}
+			}
+
+			BattleSaveExtension.BattleExensions.Add(__instance.GUID, battleExtension);
 
 		}
 
@@ -879,6 +892,83 @@ namespace Gedemon.Uchronia
 		{
 			Diagnostics.LogWarning($"[Gedemon][Battle] Begin (postfix): GUID = {battle.GUID}, oldState = {oldState}, state = {state}, HasBeenAutoResolve = {battle.HasBeenAutoResolve}");
 		}
+
+		[HarmonyPrefix]
+		[HarmonyPatch(nameof(ExecuteBattleComplete))]
+		[HarmonyPatch(new Type[] { typeof(BattleGroup), typeof(BattleVictoryType) })]
+		public static bool ExecuteBattleComplete(ref Battle __instance, BattleGroup winnerGroup, BattleVictoryType victoryType)
+		{
+			if (__instance.Siege != null)
+			{
+				Diagnostics.LogWarning($"[Gedemon][Battle] ExecuteBattleComplete for siege (prefix): SiegeState = {__instance.Siege.SiegeState}, victoryType = {victoryType}, winnerGroup.Role = {winnerGroup.Role}, winnerGroup.LeaderEmpireIndex = {winnerGroup.LeaderEmpireIndex}");
+			}
+            else
+            {
+				Diagnostics.LogWarning($"[Gedemon][Battle] ExecuteBattleComplete (prefix): victoryType = {victoryType}, winnerGroup.Role = {winnerGroup.Role}, winnerGroup.LeaderEmpireIndex = {winnerGroup.LeaderEmpireIndex}");
+			}
+
+            {
+				__instance.VictoryType = victoryType;
+				BattleGroup battleGroup = __instance.DefenderGroup;
+				if (winnerGroup.Role == Amplitude.Mercury.Interop.BattleGroupRoleType.Defender)
+				{
+					battleGroup = __instance.AttackerGroup;
+				}
+				winnerGroup.SetResult(__instance, BattleResult.Victory);
+				battleGroup.SetResult(__instance, BattleResult.Defeat);
+				__instance.DistributeSpoilsOfWar(winnerGroup);
+				if (__instance.VictoryType == BattleVictoryType.Extermination || __instance.VictoryType == BattleVictoryType.Attrition)
+				{
+					__instance.RegenArmiesAfterBattle(winnerGroup);
+					__instance.RegenArmiesAfterBattle(battleGroup);
+				}
+				SimulationEvent_BattleTerminated.Raise(__instance, __instance);
+				__instance.OnBattleTerminated();
+				if (__instance.Siege != null && __instance.Siege.SiegeState == SiegeStates.Sortie && (victoryType == BattleVictoryType.Attrition || victoryType == BattleVictoryType.Retreat) && winnerGroup.Role == Amplitude.Mercury.Interop.BattleGroupRoleType.Attacker)
+				{
+					return false;
+				}
+				if (victoryType == BattleVictoryType.Extermination || victoryType == BattleVictoryType.Retreat || victoryType == BattleVictoryType.Surrender || victoryType == BattleVictoryType.NoContest)
+				{
+					Diagnostics.Log($"[Gedemon][Battle] ExecuteBattleComplete (victoryType == BattleVictoryType.Extermination || victoryType == BattleVictoryType.Retreat || victoryType == BattleVictoryType.Surrender || victoryType == BattleVictoryType.NoContest)");
+					Empire empire = Amplitude.Mercury.Sandbox.Sandbox.Empires[winnerGroup.LeaderEmpireIndex];
+					int length = __instance.CapturePoints.Length;
+					for (int i = 0; i < length; i++)
+					{
+						ref BattleCapturePoint reference = ref __instance.CapturePoints.Data[i];
+						Diagnostics.Log($"[Gedemon][Battle] ExecuteBattleComplete CapturePoints.Data[i={i}] ownergroup = {reference.OwnerGroup} != winnerGroup.Role = {winnerGroup.Role} ?, OwnerEmpireIndex = {reference.OwnerEmpireIndex}, empire.Index = {empire.Index}");
+						if (reference.OwnerGroup != winnerGroup.Role)
+						{
+							reference.OwnerGroup = winnerGroup.Role;
+							reference.OwnerEmpireIndex = empire.Index;
+						}
+					}
+				}
+				int length2 = __instance.CapturePoints.Length;
+				for (int j = 0; j < length2; j++)
+				{
+					ref BattleCapturePoint reference2 = ref __instance.CapturePoints.Data[j];
+					Diagnostics.Log($"[Gedemon][Battle] ExecuteBattleComplete CapturePoints.Data[j={j}] ownergroup = {reference2.OwnerGroup}, OwnerEmpireIndex = {reference2.OwnerEmpireIndex}");
+
+
+
+					if (Amplitude.Mercury.Sandbox.Sandbox.SimulationEntityRepository.TryGetSimulationEntity(reference2.OriginatorGUID, out SimulationEntity entity))
+					{
+						Settlement settlement = entity as Settlement;
+						if (settlement != null)
+						{
+							Diagnostics.Log($"[Gedemon][Battle] ExecuteBattleComplete CapturePoints.Data[j={j}] is settlement (owner = {settlement.Empire.Entity.Index})");
+							Empire newOwner = Amplitude.Mercury.Sandbox.Sandbox.Empires[reference2.OwnerEmpireIndex];
+							DepartmentOfDefense.CaptureCity(settlement, newOwner, winnerGroup);
+						}
+					}
+				}
+			}
+
+
+			return false;
+		}
+
 	}
 
 	[HarmonyPatch(typeof(DepartmentOfBattles))]

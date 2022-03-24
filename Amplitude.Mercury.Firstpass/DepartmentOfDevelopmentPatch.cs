@@ -18,13 +18,14 @@ namespace Gedemon.Uchronia
 	{
 		[HarmonyPrefix]
 		[HarmonyPatch(nameof(ApplyFactionChange))]
-		public static void ApplyFactionChange(DepartmentOfDevelopment __instance)
+		public static void ApplyFactionChange(DepartmentOfDevelopment __instance, out StaticString __state)
 		{
 			Diagnostics.LogError($"[Gedemon] in ApplyFactionChange, {__instance.majorEmpire.PersonaName} is changing faction from  {__instance.majorEmpire.FactionDefinition.Name} to {__instance.nextFactionName}");
 			Diagnostics.Log($"[Gedemon] UseTrueCultureLocation() = {CultureUnlock.UseTrueCultureLocation()}, KeepOnlyCultureTerritory =  {Uchronia.KeepOnlyCultureTerritory()},  KeepTerritoryAttached = {Uchronia.KeepTerritoryAttached()}, TerritoryLossOption = {GameOptionHelper.GetGameOption(Uchronia.TerritoryLossOption)}");
 
 			MajorEmpire majorEmpire = __instance.majorEmpire;
 			StaticString nextFactionName = __instance.nextFactionName;
+			__state = majorEmpire.FactionDefinition.Name;
 
 			if (majorEmpire.DepartmentOfDevelopment.CurrentEraIndex != 0)
 			{
@@ -44,8 +45,9 @@ namespace Gedemon.Uchronia
 
 		[HarmonyPostfix]
 		[HarmonyPatch(nameof(ApplyFactionChange))]
-		public static void ApplyFactionChangePost(DepartmentOfDevelopment __instance)
+		public static void ApplyFactionChangePost(DepartmentOfDevelopment __instance, StaticString __state)
 		{
+			StaticString initialFactionName = __state;
 			if (CultureUnlock.UseTrueCultureLocation())
 			{
 				MajorEmpire majorEmpire = __instance.majorEmpire;
@@ -56,6 +58,13 @@ namespace Gedemon.Uchronia
 				CultureChange.SetFactionSymbol(majorEmpire);
 
 				TradeRoute.RestoreTradeRoutes();
+
+				// after restoring trade routes !
+				if(initialFactionName != majorEmpire.FactionDefinition.Name)
+				{
+					// (re)unify a faction under one Major Empire
+					CultureChange.MajorAssimilateAllMinorFromFaction(majorEmpire, majorEmpire.FactionDefinition.Name);
+				}
 			}
 
 			if (__instance.majorEmpire.Index == SandboxManager.Sandbox.LocalEmpireIndex)

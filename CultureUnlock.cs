@@ -612,6 +612,7 @@ namespace Gedemon.Uchronia
 
 		static List<string>[] TerritoriesWithMinorFactions;
 		static public List<string>[] TerritoriesUnlockingMajorEmpires;
+		static public List<string>[] TerritoriesOfMajorEmpires;
 
 		static IDictionary<string, List<int>> ListMinorFactionTerritories = new Dictionary<string, List<int>>();
 		static IDictionary<string, List<int>> ListMajorEmpireTerritories = new Dictionary<string, List<int>>();
@@ -1234,11 +1235,13 @@ namespace Gedemon.Uchronia
 
 			TerritoriesWithMinorFactions = new List<string>[maxNumTerritories];
 			TerritoriesUnlockingMajorEmpires = new List<string>[maxNumTerritories];
+			TerritoriesOfMajorEmpires = new List<string>[maxNumTerritories];
 
 			for (int i = 0; i < maxNumTerritories; i++)
 			{
 				TerritoriesWithMinorFactions[i] = new List<string>();
 				TerritoriesUnlockingMajorEmpires[i] = new List<string>();
+				TerritoriesOfMajorEmpires[i] = new List<string>();
 			}
 
 			foreach (KeyValuePair<string, List<int>> minorTerritories in ListMinorFactionTerritories)
@@ -1263,7 +1266,7 @@ namespace Gedemon.Uchronia
 					{
 						if (index < 0 || index >= TerritoriesUnlockingMajorEmpires.Length)
 						{
-							Diagnostics.LogError($"[Gedemon] index {index} is out of bound (TerritoriesWithMajorEmpires.Length = {TerritoriesWithMinorFactions.Length})");
+							Diagnostics.LogError($"[Gedemon] index {index} is out of bound (TerritoriesWithMajorEmpires.Length = {TerritoriesUnlockingMajorEmpires.Length})");
 						}
 						//Diagnostics.Log($"[Gedemon] adding at index {index} ({GetTerritoryName(index)})");
 						TerritoriesUnlockingMajorEmpires[index].Add(majorTerritories.Key);
@@ -1274,6 +1277,16 @@ namespace Gedemon.Uchronia
 					//Diagnostics.Log($"[Gedemon] adding at index {majorTerritories.Value[0]} ({GetTerritoryName(majorTerritories.Value[0])})");
 					TerritoriesUnlockingMajorEmpires[majorTerritories.Value[0]].Add(majorTerritories.Key);
 				}
+				foreach (int index in majorTerritories.Value)
+				{
+					if (index < 0 || index >= TerritoriesOfMajorEmpires.Length)
+					{
+						Diagnostics.LogError($"[Gedemon] index {index} is out of bound (TerritoriesOfMajorEmpires.Length = {TerritoriesOfMajorEmpires.Length})");
+					}
+					TerritoriesOfMajorEmpires[index].Add(majorTerritories.Key);
+				}
+				
+
 				if (!ListMajorEmpireCoreTerritories.ContainsKey(majorTerritories.Key))
 				{
 					Diagnostics.LogWarning($"[Gedemon] Adding missing {majorTerritories.Key} entry to listMajorEmpireCoreTerritories (using listMajorEmpireTerritories)");
@@ -1517,17 +1530,16 @@ namespace Gedemon.Uchronia
 			}
 			return false;
         }
-
-		public static bool TryGetAvailableMajorFactionsForTerritory(int territoryIndex, out StaticString factionName)
+		public static bool TryGetEraAvailableMajorFactionsForTerritory(int territoryIndex, out StaticString factionName, bool notTakenOnly = false, bool checkAllTerritories = false)
 		{
 			factionName = new StaticString("");
-			List<string> listMajorEmpires = CultureUnlock.TerritoriesUnlockingMajorEmpires[territoryIndex];
-
-			//Diagnostics.LogWarning($"[Gedemon] IsNextEraUnlock listMajorEmpires exists = {listMajorEmpires != null}");
+			List<string> listMajorEmpires = checkAllTerritories ? CultureUnlock.TerritoriesOfMajorEmpires[territoryIndex] : CultureUnlock.TerritoriesUnlockingMajorEmpires[territoryIndex];
+			List<StaticString> listMajorFactionsTaken = CultureUnlock.GetListMajorFactionTaken();
+			//Diagnostics.LogWarning($"[Gedemon] TryGetEraAvailableMajorFactionsForTerritory listMajorEmpires exists = {listMajorEmpires != null}");
 
 			if (listMajorEmpires != null)
 			{
-				//Diagnostics.LogWarning($"[Gedemon] IsNextEraUnlock listMajorEmpires count = {listMajorEmpires.Count}");
+				//Diagnostics.LogWarning($"[Gedemon] TryGetEraAvailableMajorFactionsForTerritory listMajorEmpires count = {listMajorEmpires.Count}");
 
 				if (listMajorEmpires.Count > 0)
 				{
@@ -1536,7 +1548,7 @@ namespace Gedemon.Uchronia
 					{
 						bool anyTerritory = CultureUnlock.HasNoCapitalTerritory(keyName);
 
-						//Diagnostics.LogWarning($"[Gedemon] IsNextEraUnlock check faction = {keyName}, anyTerritory = {anyTerritory}");
+						//Diagnostics.LogWarning($"[Gedemon] TryGetEraAvailableMajorFactionsForTerritory check faction = {keyName}, anyTerritory = {anyTerritory}");
 
 						if (CultureUnlock.IsCapitalTerritory(keyName, territoryIndex, anyTerritory))
 						{
@@ -1545,12 +1557,15 @@ namespace Gedemon.Uchronia
 							if (CurrentGame.Data.IsFallenEmpire(candidateFactionName))
 								continue;
 
+							if (listMajorFactionsTaken.Contains(candidateFactionName) && notTakenOnly)
+								continue;
+
 							FactionDefinition factionDefinition = Amplitude.Mercury.Utils.GameUtils.GetFactionDefinition(candidateFactionName);
 
 							if (factionDefinition == null)
 								continue;
 
-							//Diagnostics.LogError($"[Gedemon] IsNextEraUnlock for {GetTerritoryName(territoryIndex)} and {factionName} (local player era = {currentEraIndex}, next Era = {nextEraIndex}, faction era = {factionDefinition.EraIndex})");
+							//Diagnostics.LogError($"[Gedemon] TryGetEraAvailableMajorFactionsForTerritory for {GetTerritoryName(territoryIndex)} and {factionName} (local player era = {currentEraIndex}, next Era = {nextEraIndex}, faction era = {factionDefinition.EraIndex})");
 
 							if (factionDefinition.EraIndex == currentEraIndex && Sandbox.CivilizationsManager.IsLockedBy(factionDefinition.Name) == -1)
 							{
@@ -1564,7 +1579,21 @@ namespace Gedemon.Uchronia
 
 			return false;
 		}
-
+		public static List<StaticString> GetListMajorFactionTaken()
+        {
+			List<StaticString> listMajorFactions = new List<StaticString>();
+			int numMajor = Amplitude.Mercury.Sandbox.Sandbox.MajorEmpires.Length;
+			for (int empireIndex = 0; empireIndex < numMajor; empireIndex++)
+			{
+				MajorEmpire majorEmpire = Sandbox.MajorEmpires[empireIndex];
+				StaticString factionName = majorEmpire.FactionDefinition.Name;
+				if (!listMajorFactions.Contains(factionName))
+					listMajorFactions.Add(factionName);
+				// unifiy minor factions names on major spawn or adoption
+				// check if numFortification++ in battle extansion
+			}
+			return listMajorFactions;
+		}
 		public static bool IsUnlockedByPlayerSlot(string civilizationName, int empireIndex)
 		{
 			return ListSlots.ContainsKey(civilizationName) && ListSlots[civilizationName].Contains(empireIndex);
@@ -1600,6 +1629,17 @@ namespace Gedemon.Uchronia
                 }
 			}
             else if (ListMajorEmpireTerritories.TryGetValue(factionName, out List<int> listTerritories))
+			{
+				return listTerritories;
+			}
+			else
+			{
+				return new List<int>();
+			}
+		}
+		public static List<int> GetListTerritoriesForMinorFaction(string factionName)
+		{
+			if (ListMinorFactionTerritories.TryGetValue(factionName, out List<int> listTerritories))
 			{
 				return listTerritories;
 			}

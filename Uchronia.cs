@@ -133,7 +133,6 @@ namespace Gedemon.Uchronia
 		};
 		//*/
 
-
 		public static GameOptionInfo TerritoryLossOption = new GameOptionInfo
 		{
 			ControlType = UIControlType.DropList,
@@ -300,64 +299,70 @@ namespace Gedemon.Uchronia
 				Description = "No limitation, all AI Empires can create outposts",
 				Value = "99"
 			},
+			//new GameOptionStateInfo
+			//{
+			//	Title = "0",
+			//	Description = "Only Humans",
+			//	Value = "0"
+			//},
 			new GameOptionStateInfo
 			{
 				Title = "1",
-				Description = "slot 1",
+				Description = "Slot 1",
 				Value = "1"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "2",
-				Description = "slot 1 and 2",
+				Description = "Slot 1 and 2",
 				Value = "2"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "3",
-				Description = "slot 1 to 3",
+				Description = "Slot 1 to 3",
 				Value = "3"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "4",
-				Description = "slot 1 to 4",
+				Description = "Slot 1 to 4",
 				Value = "4"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "5",
-				Description = "slot 1 to 5",
+				Description = "Slot 1 to 5",
 				Value = "5"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "6",
-				Description = "slot 1 to 6",
+				Description = "Slot 1 to 6",
 				Value = "6"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "7",
-				Description = "slot 1 to 7",
+				Description = "Slot 1 to 7",
 				Value = "7"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "8",
-				Description = "slot 1 to 8",
+				Description = "Slot 1 to 8",
 				Value = "8"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "9",
-				Description = "slot 1 to 9",
+				Description = "Slot 1 to 9",
 				Value = "9"
 			},
 			new GameOptionStateInfo
 			{
 				Title = "10",
-				Description = "slot 1 to 10",
+				Description = "Slot 1 to 10",
 				Value = "10"
 			},
 		};
@@ -532,7 +537,6 @@ namespace Gedemon.Uchronia
 				}
 			}
 		};
-
 
 		public static readonly GameOptionInfo StartingOutpostForMinorOption = new GameOptionInfo
 		{
@@ -762,25 +766,17 @@ namespace Gedemon.Uchronia
 		}
 		public static bool HasStartingOutpost(int EmpireIndex)
 		{
-			bool IsHuman = IsEmpireHumanSlot(EmpireIndex);
-			Diagnostics.LogWarning($"[Gedemon] HasStartingOutpost EmpireIndex = {EmpireIndex}, IsHuman = {IsHuman},  StartingOutpostForAI = {Instance.StartingOutpostForAI}, StartingOutpostForHuman = {Instance.StartingOutpostForHuman}, option = {GameOptionHelper.GetGameOption(StartingOutpost)}");
-			if (!IsSettlingEmpire(EmpireIndex, IsHuman))
-			{
-				return false;
-			}
-			if (IsHuman)
-			{
-				return Instance.StartingOutpostForHuman;
-			}
-			else
-			{
-				return Instance.StartingOutpostForAI;
-			}
+			return HasStartingOutpost(EmpireIndex, IsEmpireHumanSlot(EmpireIndex));
 		}
 
 		public static bool IsSettlingEmpire(int EmpireIndex, bool IsHuman)
 		{
-			if (EmpireIndex < GetSettlingEmpireSlots() || IsHuman)
+			int numSlots = GetSettlingEmpireSlots();
+
+			if (numSlots == 0 && !IsHuman)
+				return false;
+
+			if (EmpireIndex < numSlots || IsHuman)
 			{
 				return true;
 			}
@@ -788,11 +784,7 @@ namespace Gedemon.Uchronia
 		}
 		public static bool IsSettlingEmpire(int EmpireIndex)
 		{
-			if (EmpireIndex < GetSettlingEmpireSlots() || IsEmpireHumanSlot(EmpireIndex))
-			{
-				return true;
-			}
-			return false;
+			return IsSettlingEmpire(EmpireIndex, IsEmpireHumanSlot(EmpireIndex));
 		}
 
 		public static bool IsEmpireHumanSlot(int empireIndex)
@@ -1023,6 +1015,7 @@ namespace Gedemon.Uchronia
 			int sumEras = 0;
 			int numActive = 0;
 			int topEra = 0;
+			int maxNeolithicEraTurns = Sandbox.EndGameController.TurnLimit / 20; // 15 turns at standard
 			for (int i = 0; i < Amplitude.Mercury.Sandbox.Sandbox.NumberOfMajorEmpires; i++)
 			{
 				MajorEmpire majorEmpire = Amplitude.Mercury.Sandbox.Sandbox.MajorEmpires[i];
@@ -1038,8 +1031,25 @@ namespace Gedemon.Uchronia
 			if(numActive > 0)
             {
 				__result = System.Math.Max( sumEras / numActive, topEra - 1);
+
+				if (__result == 0 && SandboxManager.Sandbox.Turn > maxNeolithicEraTurns)
+				{
+					__result = __instance.StartingEraIndex + 1;
+					return false;
+				}				
+
 				return false;
 			}
+			//*
+            else
+            {
+                if (SandboxManager.Sandbox.Turn > maxNeolithicEraTurns)
+				{
+					__result = __instance.StartingEraIndex + 1;
+					return false;
+				}
+			}
+			//*/
 
 			__result = __instance.StartingEraIndex;
 			return false;

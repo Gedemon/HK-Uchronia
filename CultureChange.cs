@@ -901,7 +901,7 @@ namespace Gedemon.Uchronia
 			{
 				MajorEmpire potentialEmpire = Sandbox.MajorEmpires[i];
 
-				Diagnostics.LogWarning($"[Gedemon] potentialEmpire = {potentialEmpire.FactionDefinition.Name}, Armies = {potentialEmpire.Armies.Count}, Settlements = {potentialEmpire.Settlements.Count}, mustResurect = {null}, isAlive = {potentialEmpire.IsAlive}, fame = {potentialEmpire.FameScore.Value}");
+				Diagnostics.LogWarning($"[Gedemon] potentialEmpire = {potentialEmpire.FactionDefinition.Name}, Armies = {potentialEmpire.Armies.Count}, Settlements = {potentialEmpire.Settlements.Count}, mustResurect = {mustResurect}, isAlive = {potentialEmpire.IsAlive}, fame = {potentialEmpire.FameScore.Value}");
 
 				// we don't want to resurect dead Empire with more fame than us !
 				if (!potentialEmpire.IsAlive && potentialEmpire.FameScore.Value >= maxFame)
@@ -910,7 +910,7 @@ namespace Gedemon.Uchronia
 					continue;
 				}
 
-				if (potentialEmpire.Armies.Count == 0 && potentialEmpire.Settlements.Count == 0 && potentialEmpire.OccupiedCityCount.Value == 0 && potentialEmpire.IsAlive)
+				if (potentialEmpire.Armies.Count == 0 && potentialEmpire.Settlements.Count == 0 && potentialEmpire.OccupiedCityCount.Value == 0 && (potentialEmpire.IsAlive || mustResurect))
 				{
 					freeEmpire = potentialEmpire;
 					return freeEmpire;

@@ -636,8 +636,8 @@ namespace Gedemon.Uchronia
 				FixedPoint attackerStartRoundHealth = attackerGroupStats.TotalHealth;
 				FixedPoint defenderStartRoundHealth = defenderGroupStats.TotalHealth;
 
-				phasePresentation += Environment.NewLine + $"Att. {attackerCurrentPosture}, {attackerCount}[Population], {attackerGroupStats.AverageMoves}[MovementSpeed], {attackerGroupStats.AverageCombat}[CombatStrength], {(int)(attackerGroupStats.AverageHealth * 100)}%[Health], {attackerGroupStats.AverageVeterency}[Veterancy]";
-				phasePresentation += Environment.NewLine + $"Def. {defenderCurrentPosture}, {defenderCount}[Population], {defenderGroupStats.AverageMoves}[MovementSpeed], {defenderGroupStats.AverageCombat}[CombatStrength], {(int)(defenderGroupStats.AverageHealth * 100)}%[Health], {defenderGroupStats.AverageVeterency}[Veterancy], {defenderGroupStats.Fortification}[FortificationShadowed]";
+				phasePresentation += Environment.NewLine + $"Att:[{attackerCurrentPosture}][{attackerCount}[Population]][{attackerGroupStats.AverageMoves}[MovementSpeed]][{attackerGroupStats.AverageCombat}[CombatStrength]][{(int)(attackerGroupStats.AverageHealth * 100)}%[Health]][{attackerGroupStats.AverageVeterency}[Veterancy]";
+				phasePresentation += Environment.NewLine + $"Def:[{defenderCurrentPosture}][{defenderCount}[Population]][{defenderGroupStats.AverageMoves}[MovementSpeed]][{defenderGroupStats.AverageCombat}[CombatStrength]][{(int)(defenderGroupStats.AverageHealth * 100)}%[Health]][{defenderGroupStats.AverageVeterency}[Veterancy]][{fortificationCount}[FortificationShadowed]]";
 				battleExtension.BattleSummary += roundNum == 0 ? phasePresentation : Environment.NewLine + Environment.NewLine + phasePresentation;
 
 				// checks for abandonning battlefield before battle start
@@ -708,7 +708,7 @@ namespace Gedemon.Uchronia
 				// attacker combats
 				attackerUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
 				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
-				bool flag = ResolveDamage(attackerUnits, attackerGroupStats.CombatModifier, defenderUnits, defenderGroupStats.CombatModifier, ref attackerCount, ref defenderCount, ref fortificationCount, ref totalFortificationDamage, isPreview, battle);
+				bool hadCombats = ResolveDamage(attackerUnits, attackerGroupStats.CombatModifier, defenderUnits, defenderGroupStats.CombatModifier, ref attackerCount, ref defenderCount, ref fortificationCount, ref totalFortificationDamage, isPreview, battle);
 				if (attackerCount == 0 || defenderCount == 0)
 				{
 					if (attackerCount == 0 && defenderCount == 0)
@@ -739,7 +739,7 @@ namespace Gedemon.Uchronia
 				// defender combats
 				attackerUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
 				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
-				if (!(flag | ResolveDamage(defenderUnits, defenderGroupStats.CombatModifier, attackerUnits, attackerGroupStats.CombatModifier, ref defenderCount, ref attackerCount, ref fortificationCount, ref totalFortificationDamage, isPreview, battle)))
+				if (!(hadCombats | ResolveDamage(defenderUnits, defenderGroupStats.CombatModifier, attackerUnits, attackerGroupStats.CombatModifier, ref defenderCount, ref attackerCount, ref fortificationCount, ref totalFortificationDamage, isPreview, battle)))
 				{
 					break;
 				}
@@ -916,9 +916,15 @@ namespace Gedemon.Uchronia
 			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ResolveDamage: attackerModifier = {attackerModifier}, defenderModifier = {defenderModifier} ");
 
 			FixedPoint damageDivider = 800; // was 200
-			bool result = false;
+			bool hadCombats = false;
+			int maxAttacks = defenderUnits.Length * 2;
+			int numAttacks = 0;
 			for (int i = 0; i < attackerUnits.Length; i++)
 			{
+				if(numAttacks >= maxAttacks)
+                {
+					break;
+                }
 				ref UnitSimplifiedData attacker = ref attackerUnits.Data[i];
 				if (attacker.HealthRatio <= FixedPoint.Zero || (!attacker.CanAttackUnits && !attacker.CanAttackFortifications))
 				{
@@ -930,7 +936,7 @@ namespace Gedemon.Uchronia
 					break;
 				}
 
-				bool flag = false;
+				bool combatsEnded = false;
 
 				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached); // sort again (using str*healthRatio instead of str first then health) at each new loop to prevent a stronger unit in a stack to by attacked everyloop
 
@@ -942,7 +948,7 @@ namespace Gedemon.Uchronia
 						continue;
 					}
 
-					result = true;
+					hadCombats = true;
 
 					FixedPoint attackerStrength = attacker.CombatStrength * attacker.HealthRatio * attackerModifier;
 					FixedPoint defenderStrength = defender.CombatStrength * defender.HealthRatio * defenderModifier;
@@ -957,6 +963,10 @@ namespace Gedemon.Uchronia
 					if (defender.IsFortification)
 					{
 						totalFortificationDamage += damageToDefender;
+					}
+                    else
+                    {
+						numAttacks++;
 					}
 
 					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ResolveDamage: defender.HealthRatio = {defender.HealthRatio}, damage = {damageToDefender} ");
@@ -1047,7 +1057,7 @@ namespace Gedemon.Uchronia
 
 							if (defenderCount == 1 && defenderUnits.Data[0].IsFortification)
 							{
-								flag = true;
+								combatsEnded = true;
 								break;
 							}
 						}
@@ -1055,13 +1065,13 @@ namespace Gedemon.Uchronia
 
 					if (attackerCount == 0 || defenderCount == 0)
 					{
-						flag = true;
+						combatsEnded = true;
 					}
 
 					break;
 				}
 
-				if (flag)
+				if (combatsEnded)
 				{
 					break;
 				}
@@ -1072,7 +1082,7 @@ namespace Gedemon.Uchronia
 				defenderCount = 0;
 			}
 
-			return result;
+			return hadCombats;
 		}
 		public static bool HasAnimal(ListOfStruct<UnitSimplifiedData> listUnits)
 		{
@@ -1101,7 +1111,7 @@ namespace Gedemon.Uchronia
 
 				if (opponentGroupMobilityFactor - currentGroupMobilityFactor <= battleExtension.RoundNum * factorForRoundNumDelay)
 				{
-					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture -> {Posture.Withdrawal}: has delayed long enough";
+					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture [MovementSpeed] {Posture.Withdrawal}: has delayed long enough";
 					return Posture.Withdrawal;
 				}
 				else
@@ -1120,7 +1130,7 @@ namespace Gedemon.Uchronia
 					FixedPoint opponentGroupLossRatio = FixedPoint.One - (opponentGroupStats.TotalHealth / opponentGroupInitialHealth);
 					if(currentGroupLossRatio > opponentGroupLossRatio * QJM.LowReducingModifier)
 					{
-						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture -> {Posture.HastyDefense}: total casualties: -{(int)(currentGroupLossRatio * 100)}% vs -{(int)(opponentGroupLossRatio * 100)}% [Health]";
+						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture [MovementSpeed] {Posture.HastyDefense}: total casualties: -{(int)(currentGroupLossRatio * 100)}% vs -{(int)(opponentGroupLossRatio * 100)}% [Health]";
 						return Posture.HastyDefense;
 					}
                 }
@@ -1128,13 +1138,13 @@ namespace Gedemon.Uchronia
 				// very high casualties
 				if (currentGroupStats.TotalHealth < currentGroupInitialHealth * QJM.VeryHighReducingModifier)
 				{
-					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture -> {Posture.Withdrawal}: heavy total casualties: -{(int)(currentGroupLossRatio * 100)}%[Health]";
+					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture [MovementSpeed] {Posture.Withdrawal}: heavy total casualties: -{(int)(currentGroupLossRatio * 100)}%[Health]";
 					return Posture.Withdrawal;
 				}
 				// high casualties and lower strength
 				if (currentGroupStats.TotalHealth < currentGroupInitialHealth * QJM.HighReducingModifier && currentGroupStats.CombatStrength < opponentGroupStats.CombatStrength * QJM.LowReducingModifier)
 				{
-					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture -> {Posture.Withdrawal}: total casualties: -{(int)(currentGroupLossRatio * 100)}%[Health] | {currentGroupStats.AverageCombat}vs{opponentGroupStats.AverageCombat} [CombatStrength])";
+					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture [MovementSpeed] {Posture.Withdrawal}: total casualties: -{(int)(currentGroupLossRatio * 100)}%[Health] | {currentGroupStats.AverageCombat}vs{opponentGroupStats.AverageCombat} [CombatStrength]";
 					return Posture.Withdrawal;
 				}
 			}
@@ -1144,7 +1154,7 @@ namespace Gedemon.Uchronia
 
 				if (currentGroupStats.TotalHealth < currentGroupInitialHealth * QJM.VeryHighReducingModifier && currentGroupStats.CombatStrength < opponentGroupStats.CombatStrength * QJM.HighReducingModifier)
 				{
-					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture -> {Posture.Withdrawal}: total casualties: -{(int)(attackerLossRatio * 100)}% [Health] | {currentGroupStats.AverageCombat}vs{opponentGroupStats.AverageCombat} [CombatStrength])";
+					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroupStats.Name} posture [MovementSpeed] {Posture.Withdrawal}: total casualties: -{(int)(attackerLossRatio * 100)}% [Health] | {currentGroupStats.AverageCombat}vs{opponentGroupStats.AverageCombat} [CombatStrength])";
 					return Posture.Withdrawal;
 				}
 			}

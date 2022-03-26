@@ -30,12 +30,14 @@ namespace Gedemon.Uchronia
 			// BuildingVisualAffinityDefinition
 			// UnitVisualAffinityDefinition
 			// EmpireSymbolDefinition
-			// LocalizedStringElement
+			// Amplitude.Framework.Localization.LocalizedStringElement
+			// GameSpeedDefinition
+			// EraDefinition
 			/* 
-			var database1 = Databases.GetDatabase<Amplitude.Mercury.Data.Simulation.EmpireSymbolDefinition>();
-			foreach (Amplitude.Mercury.Data.Simulation.EmpireSymbolDefinition data in database1)
+			var database1 = Databases.GetDatabase<Amplitude.Mercury.Data.Simulation.EndGameDefinition>();
+			foreach (Amplitude.Mercury.Data.Simulation.EndGameDefinition data in database1)
 			{
-				//Diagnostics.LogWarning($"[Gedemon] EmpireSymbolDefinition name = {data.name}");//, Name = {data.Name}");
+				Diagnostics.LogWarning($"[Gedemon] EraDefinition name = {data.name}");//, Name = {data.Name}");
 
 				foreach (var prop in data.GetType().GetProperties())
 				{

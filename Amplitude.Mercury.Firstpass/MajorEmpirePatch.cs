@@ -61,6 +61,7 @@ namespace Gedemon.Uchronia
 		[HarmonyPatch(nameof(InitializeOnStart))]
 		public static void InitializeOnStart(MajorEmpire __instance)
 		{
+			Diagnostics.LogWarning($"[Gedemon] MajorEmpire InitializeOnStart");//, Name = {data.Name}");
 			if (Uchronia.IsEnabled())
 			{
 				MajorEmpireExtension majorEmpireExtension = new MajorEmpireExtension();

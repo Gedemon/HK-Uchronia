@@ -31,7 +31,9 @@ namespace Gedemon.Uchronia
 		public const string pluginGuid = "gedemon.humankind.uchronia";
 		public const string pluginVersion = "1.0.0.0";
 
-		public static bool LoggingStartData = false;
+		public static bool LoggingStartData = true;
+
+		static public bool SandboxInitialized = false;
 
 		#region Define Options
 
@@ -66,7 +68,7 @@ namespace Gedemon.Uchronia
 			Key = "GameOption_TCL_CreateTrueCultureLocation",
 			GroupKey = "GameOptionGroup_LobbyDifficultyOptions",
 			DefaultValue = "Off",
-			Title = "[TCL] Generate TCL for any Map <c=FF00FF>*Experimental*</c>",
+			Title = "[TCL] Generate TCL for any Map <c=FF0000>*Experimental*</c>",
 			Description = "Rename territories on unsupported or generated maps, based on relative distances using the Giant Earth Map coordinates, to use True Culture Location.",
 			States =
 			{
@@ -831,7 +833,6 @@ namespace Gedemon.Uchronia
 			}
 		}
 
-
 		private void Update()
 		{
 			if (Input.GetKeyDown((KeyCode)284)) // press F3 to toggle
@@ -869,26 +870,6 @@ namespace Gedemon.Uchronia
 	}
 
     #region Patches
-
-    [HarmonyPatch(typeof(DepartmentOfScience))]
-	public class DepartmentOfScience_Patch
-	{
-		[HarmonyPatch("EndTurnPass_ClampResearchStock")]
-		[HarmonyPrefix]
-		public static bool EndTurnPass_ClampResearchStock(DepartmentOfScience __instance, SimulationPasses.PassContext context, string name)
-		{
-			if (__instance.majorEmpire.DepartmentOfDevelopment.CurrentEraIndex != 0)
-			{
-				FixedPoint value = __instance.majorEmpire.ResearchNet.Value;
-				if (!(value <= 0) && (__instance.TechnologyQueue.CurrentResourceStock < value))
-				{
-					__instance.TechnologyQueue.CurrentResourceStock = value;
-					Amplitude.Mercury.Sandbox.Sandbox.SimulationEntityRepository.SetSynchronizationDirty(__instance.TechnologyQueue);
-				}
-			}
-			return false;
-		}
-	}
 
 	[HarmonyPatch(typeof(DepartmentOfIndustry))]
 	public class DepartmentOfIndustry_Patch
@@ -994,6 +975,7 @@ namespace Gedemon.Uchronia
 		[HarmonyPostfix]
 		public static void InitializeOnStart(Timeline __instance, SandboxStartSettings sandboxStartSettings)
 		{
+			Diagnostics.LogWarning($"[Gedemon] [Timeline] InitializeOnStart");
 			// reinitialize globalEraThresholds
 			int numSettlingEmpires = Uchronia.GetSettlingEmpireSlots();
 			if (CultureUnlock.UseTrueCultureLocation() && numSettlingEmpires < sandboxStartSettings.NumberOfMajorEmpires)
@@ -1012,9 +994,12 @@ namespace Gedemon.Uchronia
 		[HarmonyPrefix]
 		public static bool GetGlobalEraIndex(Timeline __instance, ref int __result)
 		{
+			//Diagnostics.LogWarning($"[Gedemon] [Timeline] GetGlobalEraIndex, Sandbox.EndGameController.TurnLimit = {Sandbox.EndGameController.TurnLimit}");
+
 			int sumEras = 0;
 			int numActive = 0;
 			int topEra = 0;
+
 			int maxNeolithicEraTurns = Sandbox.EndGameController.TurnLimit / 20; // 15 turns at standard
 			for (int i = 0; i < Amplitude.Mercury.Sandbox.Sandbox.NumberOfMajorEmpires; i++)
 			{
@@ -1266,10 +1251,18 @@ namespace Gedemon.Uchronia
 	[HarmonyPatch(typeof(MainMenuScreen))]
 	public class MainMenuScreen_Patch
 	{
+		static bool isInitialized = false;
+
 		[HarmonyPatch("Refresh")]
 		[HarmonyPostfix]
 		public static void Refresh(MainMenuScreen __instance)
 		{
+			if(!isInitialized)
+            {
+				ModLoading.OnMainMenuLoaded();
+				isInitialized = true;
+			}
+
 			Transform[] children = __instance.transform.GetChildren();
 			foreach(Transform child in children)
             {

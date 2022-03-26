@@ -24,6 +24,7 @@ using Amplitude.Mercury.UI.Helpers;
 using Diagnostics = Amplitude.Diagnostics;
 using System;
 using UnityEngine;
+using Amplitude.Mercury.Data;
 
 namespace Gedemon.Uchronia
 {
@@ -213,6 +214,21 @@ namespace Gedemon.Uchronia
 			}
 		}
 
+		public static string GetPostureModifierValueString(FixedPoint modifier)
+        {
+			if(modifier > 1)
+            {
+				return $"<c=00FF00>x{modifier}</c>";
+
+			}
+			if (modifier < 1)
+			{
+				return $"<c=FFAA00>x{modifier}</c>";
+
+			}
+			return $"x{modifier}";
+
+		}
 
 		public static void ResolvePosture(ref UnitGroupStats currentGroup, ref UnitGroupStats opponentGroup, ref BattleExtension battleExtension)
         {
@@ -240,7 +256,7 @@ namespace Gedemon.Uchronia
 				if (currentGroup.AverageMoves < opponentGroup.AverageMoves * QJM.MediumReducingModifier)
 				{
 					currentGroup.CombatModifier *= QJM.LowPenalty;
-					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} attack aborted, faster opponent: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageMoves} vs {opponentGroup.AverageMoves} [MovementSpeed]";
+					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} attack aborted, faster opponent: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageMoves} vs {opponentGroup.AverageMoves} [MovementSpeed]";
 					ChangePosture(currentGroup, Posture.HastyDefense, ref battleExtension);
 					return;
 				}
@@ -260,7 +276,7 @@ namespace Gedemon.Uchronia
 							if (currentGroup.CombatStrength < opponentGroup.CombatStrength * QJM.LowReducingModifier)
                             {
 								currentGroup.CombatModifier *= QJM.LowPenalty;
-								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} All out Attack is countered: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.CombatStrength} vs {opponentGroup.CombatStrength} [CombatStrength]";
+								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} All out Attack is countered: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.CombatStrength} vs {opponentGroup.CombatStrength} [CombatStrength]";
 								ChangePosture(currentGroup, Posture.HastyDefense, ref battleExtension);
 							}
 
@@ -271,7 +287,7 @@ namespace Gedemon.Uchronia
 							if (currentGroup.CombatStrength < opponentGroup.CombatStrength * QJM.LowReducingModifier)
 							{
 								currentGroup.CombatModifier *= QJM.MediumPenalty;
-								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} not strong enough for All out Attack: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.CombatStrength} vs {opponentGroup.CombatStrength} [CombatStrength]";
+								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} not strong enough for All out Attack: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.CombatStrength} vs {opponentGroup.CombatStrength} [CombatStrength]";
 								ChangePosture(currentGroup, Posture.DeliberateAttack, ref battleExtension);
 							}
 							break;
@@ -285,7 +301,7 @@ namespace Gedemon.Uchronia
 				case Posture.Delay:
 
 					currentGroup.CombatModifier *= QJM.GetPostureBaseModifier(currentGroupPosture);
-					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is delaying: x{currentGroup.CombatModifier} [CombatStrength]";
+					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is delaying: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength]";
 					break;
 
 				case Posture.DeliberateAttack:
@@ -296,7 +312,7 @@ namespace Gedemon.Uchronia
 						case Posture.Pursuit:
 
 							currentGroup.CombatModifier *= QJM.LowPenalty;
-							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is pushed into defense by the enemy initiative : x{currentGroup.CombatModifier} [CombatStrength]";
+							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is pushed into defense by the enemy initiative : {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength]";
 							ChangePosture(currentGroup, Posture.HastyDefense, ref battleExtension);
 							break;
 
@@ -309,7 +325,7 @@ namespace Gedemon.Uchronia
 				case Posture.HastyDefense:
 
 					currentGroup.CombatModifier *= QJM.GetPostureBaseModifier(currentGroupPosture);
-					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} has hasty defense: x{currentGroup.CombatModifier} [CombatStrength]";
+					battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} has hasty defense: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength]";
 					break;
 
 				case Posture.MobileAttack:
@@ -317,7 +333,7 @@ namespace Gedemon.Uchronia
 					if (currentGroup.AverageVeterency < QJM.VeterancyForMobileAttack)
 					{
 						currentGroup.CombatModifier *= QJM.LowPenalty;
-						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Mobile Attack is failing: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageVeterency}/{QJM.VeterancyForMobileAttack} [Veterancy] required";
+						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Mobile Attack is failing: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageVeterency}/{QJM.VeterancyForMobileAttack} [Veterancy] required";
 						ChangePosture(currentGroup, Posture.DeliberateAttack, ref battleExtension);
 						break;
 					}
@@ -327,7 +343,7 @@ namespace Gedemon.Uchronia
 					if (currentGroup.AverageVeterency * MoveModifier < opponentGroup.AverageVeterency * QJM.MediumReducingModifier)
 					{
 						currentGroup.CombatModifier *= QJM.MediumPenalty;
-						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Mobile Attack is failing: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageVeterency} [Veterancy] vs {opponentGroup.AverageVeterency} [Veterancy], {currentGroup.AverageMoves} vs {opponentGroup.AverageMoves} [MovementSpeed]";
+						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Mobile Attack is failing: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageVeterency} [Veterancy] vs {opponentGroup.AverageVeterency} [Veterancy], {currentGroup.AverageMoves} vs {opponentGroup.AverageMoves} [MovementSpeed]";
 						ChangePosture(currentGroup, Posture.DeliberateAttack, ref battleExtension);
 						break;
 					}
@@ -336,13 +352,13 @@ namespace Gedemon.Uchronia
 					if (currentGroup.AverageVeterency * MoveModifier * QJM.HighReducingModifier > opponentGroup.AverageVeterency + QJM.VeterancyForMobileAttack)
 					{
 						currentGroup.CombatModifier *= QJM.VeryHighBonus;
-						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Mobile Attack is perfectly executed: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageVeterency} vs {opponentGroup.AverageVeterency} [Veterancy], {currentGroup.AverageMoves} vs {opponentGroup.AverageMoves} [MovementSpeed]";
+						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Mobile Attack is perfectly executed: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageVeterency} vs {opponentGroup.AverageVeterency} [Veterancy], {currentGroup.AverageMoves} vs {opponentGroup.AverageMoves} [MovementSpeed]";
 						break;
 					}
 					if (currentGroup.AverageVeterency * MoveModifier * QJM.MediumReducingModifier > opponentGroup.AverageVeterency)
 					{
 						currentGroup.CombatModifier *= QJM.MediumBonus;
-						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Mobile Attack is well executed: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageVeterency} vs {opponentGroup.AverageVeterency} [Veterancy], {currentGroup.AverageMoves} vs {opponentGroup.AverageMoves} [MovementSpeed]";
+						battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Mobile Attack is well executed: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageVeterency} vs {opponentGroup.AverageVeterency} [Veterancy], {currentGroup.AverageMoves} vs {opponentGroup.AverageMoves} [MovementSpeed]";
 						break;
 					}
 					break;
@@ -354,7 +370,7 @@ namespace Gedemon.Uchronia
 							if (currentGroup.AverageMoves < opponentGroup.AverageMoves)
 							{
 								currentGroup.CombatModifier *= QJM.LowPenalty;
-								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is caught unprepared: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
+								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is caught unprepared: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
 								ChangePosture(currentGroup, Posture.HastyDefense, ref battleExtension);
 								break;
 							}
@@ -364,7 +380,7 @@ namespace Gedemon.Uchronia
 							if (currentGroup.AverageMoves < opponentGroup.AverageMoves * QJM.LowReducingModifier)
 							{
 								currentGroup.CombatModifier *= QJM.LowPenalty;
-								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is caught unprepared: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
+								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is caught unprepared: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
 								ChangePosture(currentGroup, Posture.HastyDefense, ref battleExtension);
 								break;
 							}
@@ -374,7 +390,7 @@ namespace Gedemon.Uchronia
 							if (currentGroup.AverageMoves < opponentGroup.AverageMoves * QJM.MediumReducingModifier)
 							{
 								currentGroup.CombatModifier *= QJM.LowPenalty;
-								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is caught unprepared: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
+								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} is caught unprepared: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
 								ChangePosture(currentGroup, Posture.HastyDefense, ref battleExtension);
 								break;
 							}
@@ -383,7 +399,7 @@ namespace Gedemon.Uchronia
 						default:
 							{
 								currentGroup.CombatModifier *= QJM.GetPostureBaseModifier(currentGroupPosture);
-								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} has a solid defense (x{currentGroup.CombatModifier} [CombatStrength])";
+								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} has a solid defense: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength]";
 								break;
 							}
 					}
@@ -398,14 +414,14 @@ namespace Gedemon.Uchronia
 						case Posture.MobileAttack:
 
 							currentGroup.CombatModifier *= QJM.LowPenalty;
-							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Pursuit is failing against an advancing opponent: x{currentGroup.CombatModifier} [CombatStrength]";
+							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Pursuit is failing against an advancing opponent: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength]";
 							ChangePosture(currentGroup, Posture.AllOutAttack, ref battleExtension);
 							break;
 
 						case Posture.DeliberateAttack:
 
 							currentGroup.CombatModifier *= QJM.MediumPenalty;
-							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Pursuit is failing against an organized opponent: x{currentGroup.CombatModifier} [CombatStrength]";
+							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Pursuit is failing against an organized opponent: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength]";
 							ChangePosture(currentGroup, Posture.AllOutAttack, ref battleExtension);
 							break;
 
@@ -414,7 +430,7 @@ namespace Gedemon.Uchronia
 						case Posture.PreparedDefense:
 
 							currentGroup.CombatModifier *= QJM.VeryHighPenalty;
-							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Pursuit is failing catastrophically against defense: x{currentGroup.CombatModifier} [CombatStrength]";
+							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Pursuit is failing catastrophically against defense: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength]";
 							ChangePosture(currentGroup, Posture.AllOutAttack, ref battleExtension);
 							break;
 
@@ -436,7 +452,7 @@ namespace Gedemon.Uchronia
 							if (currentGroup.CombatStrength * RetreatMoveModifier < opponentGroup.CombatStrength * QJM.MediumReducingModifier)
 							{
 								currentGroup.CombatModifier *= QJM.MediumPenalty;
-								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Retreat is turning into panic: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
+								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Retreat is turning into panic: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
 								ChangePosture(currentGroup, Posture.Routed, ref battleExtension);
 							}
 							break;
@@ -446,7 +462,7 @@ namespace Gedemon.Uchronia
 							if (currentGroup.CombatStrength * RetreatMoveModifier < opponentGroup.CombatStrength * QJM.LowReducingModifier)
 							{
 								currentGroup.CombatModifier *= QJM.HighPenalty;
-								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Retreat is turning into a total disaster: x{currentGroup.CombatModifier} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
+								battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Retreat is turning into a total disaster: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength], {currentGroup.AverageMoves}/{opponentGroup.AverageMoves} [MovementSpeed]";
 								ChangePosture(currentGroup, Posture.Routed, ref battleExtension);
 							}
 							break;
@@ -465,7 +481,7 @@ namespace Gedemon.Uchronia
 						case Posture.Pursuit:
 
 							currentGroup.CombatModifier *= QJM.HighPenalty;
-							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Routed units are pursued: x{currentGroup.CombatModifier} [CombatStrength]";
+							battleExtension.BattleSummary += Environment.NewLine + $"{currentGroup.Name} Routed units are pursued: {GetPostureModifierValueString(currentGroup.CombatModifier)} [CombatStrength]";
 
 							break;
 						default:
@@ -969,6 +985,107 @@ namespace Gedemon.Uchronia
 			return false;
 		}
 
+		[HarmonyPrefix]
+		[HarmonyPatch(nameof(ForceMainArmyMovement))]
+		public static bool ForceMainArmyMovement(Battle __instance, BattleGroup retreatingGroup)
+		{
+			if (retreatingGroup.Contenders.Count == 0 || retreatingGroup.Contenders[0].Participants.Count == 0)
+			{
+				return false;
+			}
+
+			Participant mainParticipant = null;
+			__instance.TryGetMainParticipantFromBattleGroup(retreatingGroup, out mainParticipant);
+			Participant_Army participant_Army = mainParticipant as Participant_Army;
+			if (participant_Army == null)
+			{
+				return false;
+			}
+
+			Army army = participant_Army.Army;
+			__instance.RemoveParticipant(retreatingGroup, 0, participant_Army);
+			participant_Army.Release(raiseSimulationEvent: true);
+			if (army.Units.Count == 0)
+			{
+				return false;
+			}
+
+			BattleGroup obj = (retreatingGroup.Role == __instance.DefenderGroup.Role) ? __instance.AttackerGroup : __instance.DefenderGroup;
+			int num = obj.OriginPosition.ToTileIndex();
+			PathfindContext pathfindContext = PathfindContext.GetArmyPathfindContextForWorld(army);
+			ReachableResults reachableResults = default(ReachableResults);
+			Army army2 = obj.GetMainArmy() as Army;
+			if (army2 != null)
+			{
+				pathfindContext.RetreatZoneOfControlIndex = army2.ZoneOfControlIndex;
+			}
+
+			if (Battle.GetReachableRetreatDestinations(ref pathfindContext, ref reachableResults) != PathResultStatus.Success)
+			{
+				Battle.DestroyFailedRetreatingArmy(army, num, __instance.GUID);
+				return false;
+			}
+
+			int directionToTileIndex = (int)WorldPosition.GetDirectionToTileIndex(num, army.WorldPosition.ToTileIndex());
+			int numberOfTiles = reachableResults.NumberOfTiles;
+			int num2 = 1;
+			int num3 = int.MaxValue;
+			int num4 = -1;
+			for (int i = 0; i < numberOfTiles; i++)
+			{
+				int num5 = reachableResults.ReachableTileIndexes[i];
+				int tileIndexDistance = WorldPosition.GetTileIndexDistance(num, num5);
+				if (tileIndexDistance >= num2)
+				{
+					int num6 = Mathf.Abs((int)(directionToTileIndex - WorldPosition.GetDirectionToTileIndex(num, num5)));
+					if (tileIndexDistance != num2 || num6 >= num3)
+					{
+						num2 = tileIndexDistance;
+						num3 = num6;
+						num4 = num5;
+					}
+				}
+			}
+
+			if (num4 < 0 || num2 <= 1)
+			{
+				Battle.DestroyFailedRetreatingArmy(army, num, __instance.GUID);
+				return false;
+			}
+
+			PathfindSetupData pathfindSetupData = default(PathfindSetupData);
+			pathfindSetupData.ResetAll();
+			pathfindSetupData.StartingWorldPosition = pathfindContext.WorldPosition;
+			pathfindSetupData.DestinationTileIndex = num4;
+			pathfindContext.MovementRatio = FixedPoint.HalfOne; // FixedPoint.One
+			Battle.astarResults.Clear();
+			Amplitude.Mercury.Sandbox.Sandbox.PathfindManager.FindPath(ref pathfindContext, ref pathfindSetupData, ref Battle.astarResults);
+			if (Battle.astarResults.ResultStatus != PathResultStatus.Success)
+			{
+				Battle.DestroyFailedRetreatingArmy(army, num, __instance.GUID);
+				return false;
+			}
+
+			while (Battle.astarResults.StepCount > 0 && Battle.astarResults.Steps[Battle.astarResults.StepCount - 1].Turn > 1)
+			{
+				Battle.astarResults.RemoveAt(Battle.astarResults.StepCount - 1);
+			}
+
+			int tileIndex = Battle.astarResults.Steps[Battle.astarResults.StepCount - 1].TileIndex;
+			if (Battle.astarResults.StepCount < 1 || WorldPosition.GetTileIndexDistance(num, tileIndex) <= 1)
+			{
+				Battle.DestroyFailedRetreatingArmy(army, num, __instance.GUID);
+				return false;
+			}
+
+			DepartmentOfDefense.SetArmyMovementRatio(army, FixedPoint.HalfOne); // FixedPoint.One
+			army.AddUnitStatus(DepartmentOfDefense.RetreatedUnitStatusName, StatusInitiatorType.Battle, -1);
+			Amplitude.Mercury.Sandbox.Sandbox.World.AllocateArmyPathNodes(0uL, army, ref Battle.astarResults, 0);
+			DepartmentOfTransportation.ExecuteMovement(army, ref Battle.astarResults);
+			DepartmentOfDefense.SetArmyMovementRatio(army, FixedPoint.Zero);
+
+			return false;
+		}
 	}
 
 	[HarmonyPatch(typeof(DepartmentOfBattles))]
@@ -1056,8 +1173,6 @@ namespace Gedemon.Uchronia
 			return true;
 		}
 	}
-
-
 
 	[HarmonyPatch(typeof(BattleScreen_BattleActions))]
 	public class BattleScreen_BattleActions_Patch
@@ -1347,8 +1462,8 @@ namespace Gedemon.Uchronia
 		[HarmonyPatch(nameof(GetBattleArenaWidth))]
 		public static bool GetBattleArenaWidth(ref int __result)
 		{
-			Diagnostics.LogWarning($"[Gedemon][BattleArena] GetBattleArenaWidth (global era = {Sandbox.Timeline.GetGlobalEraIndex()})");
-			__result = 2 + Sandbox.Timeline.GetGlobalEraIndex();
+			//Diagnostics.LogWarning($"[Gedemon][BattleArena] GetBattleArenaWidth (global era = {Sandbox.Timeline.GetGlobalEraIndex()})");
+			__result = 2 + (Sandbox.Timeline.GetGlobalEraIndex()/2);
 			return false;
 		}
 
@@ -1357,7 +1472,7 @@ namespace Gedemon.Uchronia
 		public static bool GetBattleArenaHeight(ref int __result)
 		{
 			//Diagnostics.LogWarning($"[Gedemon][BattleArena] GetBattleArenaHeight");
-			__result = 2 + Sandbox.Timeline.GetGlobalEraIndex();
+			__result = 2 + (Sandbox.Timeline.GetGlobalEraIndex()/2);
 			return false;
 		}
 	}

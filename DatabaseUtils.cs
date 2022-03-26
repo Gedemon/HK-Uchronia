@@ -9,8 +9,10 @@ using Amplitude;
 using Amplitude.Framework;
 using Amplitude.Framework.Localization;
 using Amplitude.Mercury;
+using Amplitude.Mercury.Data.Simulation;
 using Amplitude.Mercury.Simulation;
 using Amplitude.UI;
+using UnityEngine;
 using Diagnostics = Amplitude.Diagnostics;
 
 namespace Gedemon.Uchronia
@@ -95,23 +97,81 @@ namespace Gedemon.Uchronia
 
         static bool TryGetUIMapperRow(XmlReader reader, out UIMapper UIMapperRow)
         {
-            UIMapperRow = new UIMapper();
+            int updatedField = 0;
+            UIMapperRow = ScriptableObject.CreateInstance<UIMapper>(); // new UIMapper();
             if (TryGetAttribute(reader, "Name", out string name))
             {
-                if (TryGetAttribute(reader, "Description", out string Description) && TryGetAttribute(reader, "Title", out string Title))
+                // mandatory field
+                if (TryGetAttribute(reader, "Title", out string Title)) 
                 {
                     UIMapperRow.Name = new StaticString(name);
-                    UIMapperRow.Description = Description;
                     UIMapperRow.Title = Title;
-                    return true;
+                    updatedField++;
+                }
+                else
+                {
+                    return false;
+                }
+                // optional fields
+                if (TryGetAttribute(reader, "Description", out string Description))
+                {
+                    UIMapperRow.Description = Description;
+                    updatedField++;
                 }
             }
-            return false;
+            return updatedField > 0; ;
+        }
+        static bool TryGetEraDefinitionRow(XmlReader reader, out EraDefinition DatabaseRow)
+        {
+            int updatedField = 0;
+            DatabaseRow = ScriptableObject.CreateInstance<EraDefinition>(); // new EraDefinition();
+            if (TryGetAttribute(reader, "Name", out string name))
+            {
+                // we're updating the DB directly
+                var database = Databases.GetDatabase<EraDefinition>();
+                if (database.TryGetValue(new StaticString(name), out DatabaseRow))
+                {
+                    if (TryGetAttribute(reader, "EraStarsCountEvolutionRequirement", out string EraStarsCountEvolutionRequirement))
+                    {
+                        if(float.TryParse(EraStarsCountEvolutionRequirement, out float eraStars))
+                        {
+                            DatabaseRow.EraStarsCountEvolutionRequirement = (FixedPoint)eraStars;
+                            updatedField++;
+                        }
+                    }
+                }
+            }
+            return updatedField > 0;
+        }
+        static bool TryGetGameSpeedDefinitionRow(XmlReader reader, out GameSpeedDefinition DatabaseRow)
+        {
+            int updatedField = 0;
+            DatabaseRow = ScriptableObject.CreateInstance<GameSpeedDefinition>(); // new GameSpeedDefinition();
+            if (TryGetAttribute(reader, "Name", out string name))
+            {
+                var database = Databases.GetDatabase<GameSpeedDefinition>();
+                if (database.TryGetValue(new StaticString(name), out DatabaseRow))
+                {
+                    if (TryGetAttribute(reader, "EndGameTurnLimitMultiplier", out string EndGameTurnLimitMultiplier))
+                    {
+                        if (float.TryParse(EndGameTurnLimitMultiplier, out float endTurnMultiplier))
+                        {
+                            DatabaseRow.EndGameTurnLimitMultiplier = endTurnMultiplier;
+                            updatedField++;
+                        }
+                    }
+                }
+            }
+            return updatedField > 0;
         }
 
         public static IDictionary<string, string> TranslationTable = new Dictionary<string, string>();
+        public static IDictionary<string, string> ModDefines = new Dictionary<string, string>();
         public static List<UIMapper> UIMapperList = new List<UIMapper>();
-        static readonly List<string> SupportedTablesXML = new List<string> { "UIMapper", "CivilizationCityAliases", "LocalizedText", "CityMap", "MajorEmpireTerritories", "MajorEmpireCoreTerritories", "MinorFactionTerritories", "ExtraPositions", "ExtraPositionsNewWorld", "ContinentNames", "TerritoryNames", "NoCapital", "NomadCultures" };
+        public static List<EraDefinition> EraDefinitionList = new List<EraDefinition>();
+        public static List<GameSpeedDefinition> GameSpeedDefinitionList = new List<GameSpeedDefinition>();
+
+        static readonly List<string> SupportedTablesXML = new List<string> { "ModDefines", "EraDefinition", "GameSpeedDefinition", "UIMapper", "CivilizationCityAliases", "LocalizedText", "CityMap", "MajorEmpireTerritories", "MajorEmpireCoreTerritories", "MinorFactionTerritories", "ExtraPositions", "ExtraPositionsNewWorld", "ContinentNames", "TerritoryNames", "NoCapital", "NomadCultures" };
         public static void LoadXML(string input, string provider, bool inputIsText = false)
         {
             XmlReader xmlReader;
@@ -170,6 +230,7 @@ namespace Gedemon.Uchronia
                     {
                         if (xmlReader.HasAttributes)
                         {
+                            bool rowLoaded = false;
                             switch (currentTable)
                             {
                                 #region MapTCL
@@ -182,11 +243,7 @@ namespace Gedemon.Uchronia
                                         if (TryGetFactionTerritoriesRow(xmlReader, out string civilization, out List<int> territories) && !currentMapTCL.MajorEmpireTerritories.ContainsKey(civilization))
                                         {
                                             currentMapTCL.MajorEmpireTerritories.Add(civilization, territories);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add Faction/Territories Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -203,11 +260,7 @@ namespace Gedemon.Uchronia
                                         if (TryGetFactionTerritoriesRow(xmlReader, out string civilization, out List<int> territories) && !currentMapTCL.MajorEmpireCoreTerritories.ContainsKey(civilization))
                                         {
                                             currentMapTCL.MajorEmpireCoreTerritories.Add(civilization, territories);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add Faction/Territories Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -224,11 +277,7 @@ namespace Gedemon.Uchronia
                                         if (TryGetFactionTerritoriesRow(xmlReader, out string civilization, out List<int> territories) && !currentMapTCL.MinorFactionTerritories.ContainsKey(civilization))
                                         {
                                             currentMapTCL.MinorFactionTerritories.Add(civilization, territories);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add Faction/Territories Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -245,11 +294,7 @@ namespace Gedemon.Uchronia
                                         if (TryGetIndexNameRow(xmlReader, out string name, out int index) && !currentMapTCL.ContinentNames.ContainsKey(index))
                                         {
                                             currentMapTCL.ContinentNames.Add(index, name);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add Index/Name Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -266,11 +311,7 @@ namespace Gedemon.Uchronia
                                         if (TryGetIndexNameRow(xmlReader, out string name, out int index) && !currentMapTCL.TerritoryNames.ContainsKey(index))
                                         {
                                             currentMapTCL.TerritoryNames.Add(index, name);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add Index/Name Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -287,11 +328,7 @@ namespace Gedemon.Uchronia
                                         if (TryGetIndexPositionRow(xmlReader, out int index, out Hexagon.OffsetCoords position) && !currentMapTCL.ExtraPositions.ContainsKey(index))
                                         {
                                             currentMapTCL.ExtraPositions.Add(index, position);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add Index/Name Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -308,11 +345,7 @@ namespace Gedemon.Uchronia
                                         if (TryGetIndexPositionRow(xmlReader, out int index, out Hexagon.OffsetCoords position) && !currentMapTCL.ExtraPositionsNewWorld.ContainsKey(index))
                                         {
                                             currentMapTCL.ExtraPositionsNewWorld.Add(index, position);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add Index/Name Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -330,11 +363,7 @@ namespace Gedemon.Uchronia
                                         if (civilization != null && !currentMapTCL.NoCapital.Contains(civilization))
                                         {
                                             currentMapTCL.NoCapital.Add(civilization);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't read Civilization Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -352,11 +381,7 @@ namespace Gedemon.Uchronia
                                         if (civilization != null && !currentMapTCL.NomadCultures.Contains(civilization))
                                         {
                                             currentMapTCL.NomadCultures.Add(civilization);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't read Civilization Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -373,11 +398,7 @@ namespace Gedemon.Uchronia
                                         if (TryGetCityMapRow(xmlReader, out CityPosition cityPosition))
                                         {
                                             currentMapTCL.CityMap.Add(cityPosition);
-                                        }
-                                        else
-                                        {
-                                            IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                            Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add CityMap Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                            rowLoaded = true;
                                         }
                                     }
                                     else
@@ -390,33 +411,62 @@ namespace Gedemon.Uchronia
                                     if (TryGetAttribute(xmlReader, "Civilization", out string Civilization) && TryGetAttribute(xmlReader, "Aliases", out string Aliases) && !TranslationTable.ContainsKey(Civilization))
                                     {                                        
                                         CityMap.CivilizationAliases.Add(Civilization, Aliases.Split(',').ToList());
-                                    }
-                                    else
-                                    {
-                                        IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                        Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add CivilizationAliases Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                        rowLoaded = true;
                                     }
                                     break;
                                 case "LocalizedText":
-                                    if (TryGetAttribute(xmlReader, "Tag", out string Tag) && TryGetAttribute(xmlReader, "Text", out string Text) && !TranslationTable.ContainsKey(Tag))
-                                        TranslationTable.Add(Tag, Text);
-                                    else
+                                    if (TryGetAttribute(xmlReader, "Tag", out string Tag) && TryGetAttribute(xmlReader, "Text", out string Text))
                                     {
-                                        IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                        Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add LocalizedText Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                        if (!TranslationTable.ContainsKey(Tag))
+                                        {
+                                            TranslationTable.Add(Tag, Text);
+                                            rowLoaded = true;
+                                        }
+                                        else
+                                        {
+                                            //Diagnostics.LogError($"[Gedemon] [LoadXML] Can't add LocalizedText Row with Tag = {Tag}, Text = {Text}), Tag already added with Text = {TranslationTable[Tag]}");
+                                            rowLoaded = true; // don't log those
+                                        }
                                     }
                                     break;
                                 case "UIMapper":
                                     if (TryGetUIMapperRow(xmlReader, out UIMapper UIMapperRow))
                                     {
                                         UIMapperList.Add(UIMapperRow);
-                                    }
-                                    else
-                                    {
-                                        IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
-                                        Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add CityMap Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+                                        rowLoaded = true;
                                     }
                                     break;
+                                case "EraDefinition":
+                                    if (TryGetEraDefinitionRow(xmlReader, out EraDefinition EraDefinitionRow))
+                                    {
+                                        //EraDefinitionList.Add(EraDefinitionRow);
+                                        rowLoaded = true;
+                                    }
+                                    break;
+                                case "GameSpeedDefinition":
+                                    if (TryGetGameSpeedDefinitionRow(xmlReader, out GameSpeedDefinition GameSpeedDefinitionRow))
+                                    {
+                                        //GameSpeedDefinitionList.Add(GameSpeedDefinitionRow);
+                                        rowLoaded = true;
+                                    }
+                                    break;
+                                case "ModDefines":
+                                    if (TryGetAttribute(xmlReader, "Name", out string defineName) && TryGetAttribute(xmlReader, "Value", out string defineValue))
+                                    {
+                                        if (!ModDefines.ContainsKey(defineName))
+                                        {
+                                            ModDefines.Add(defineName, defineValue);
+                                            rowLoaded = true;
+                                        }
+                                    }
+                                    break;
+
+                            }
+                            if (!rowLoaded)
+                            {
+                                IXmlLineInfo xmlInfo = xmlReader as IXmlLineInfo;
+                                Diagnostics.LogError($"[Gedemon] [LoadXML] [Element] Can't add Row (current table = {currentTable}) at line = {xmlInfo.LineNumber}, position = {xmlInfo.LinePosition}");
+
                             }
                         }
                     }
@@ -451,25 +501,70 @@ namespace Gedemon.Uchronia
                 });
             }
         }
-
         public static void UpdateUIMapperDB()
         {
-            var modUIMapper = Databases.GetDatabase<UIMapper>();
-            foreach (UIMapper mapper in UIMapperList)
+            var database = Databases.GetDatabase<UIMapper>();
+            foreach (var moddedDatabaseRow in UIMapperList)
             {
-                modUIMapper.Touch(mapper);
+                database.Touch(moddedDatabaseRow);
             }
         }
+        public static FixedPoint GetEraCostModifier(string eraName)
+        {
+            if (ModDefines.TryGetValue(eraName+"CostModifier", out string costModifier))
+            {
+                if (float.TryParse(costModifier, out float modifier))
+                {
+                    return (FixedPoint)modifier;
+                }
+            }
+            return FixedPoint.One;
+        }
+        public static FixedPoint GetSpecialTechCostModifier(string techName)
+        {
+            if (ModDefines.TryGetValue(techName + "CostModifier", out string costModifier))
+            {
+                if (float.TryParse(costModifier, out float modifier))
+                {
+                    return (FixedPoint)modifier;
+                }
+            }
+            return FixedPoint.One;
+        }
+        public static void UpdateEndTurnLimit()
+        {
+            if (ModDefines.TryGetValue("EndTurnBaseValue", out string endTurnString))
+            {
+                if (int.TryParse(endTurnString, out int endTurn))
+                {
+                    ref EndGameController endGameController = ref Amplitude.Mercury.Sandbox.Sandbox.EndGameController;
+                    endGameController.TurnLimit = endTurn;
+                }
+            }
+        }
+        public static void OnModPreloaded()
+        {
+            // for DB that need to be loaded before Sandbox is started
 
-        public static void OnSandboxStarted()
+        }
+        public static void OnSandboxStart()
         {
             //OffsetMapXML();
             UpdateTranslationDB();
             UpdateUIMapperDB();
         }
+
+        public static void AfterSandboxStarted()
+        {
+            UpdateEndTurnLimit();
+        }
+
         public static void OnExitSandbox()
         {
             TranslationTable.Clear();
+            UIMapperList.Clear();
+            EraDefinitionList.Clear();
+            GameSpeedDefinitionList.Clear();
         }
 
         public static void OffsetMapXML()
@@ -495,5 +590,29 @@ namespace Gedemon.Uchronia
 
             xmlDoc.Save("path2");
         }
+
+
+
+        /*
+        [HarmonyPatch(typeof(EndGameCondition_TurnLimit))]
+        public class CultureUnlock_PresentationPawn
+        {
+
+            [HarmonyPrefix]
+            [HarmonyPatch(nameof(GetTurnLimit))]
+            public static bool GetTurnLimit(EndGameCondition_TurnLimit __instance, ref int __result)
+            {
+                __result = 1000;
+                return false;
+            }
+        }
+                public FixedPoint GetTechnologyCostWithModifiers(ref Technology technology)
+        {
+            FixedPoint initialCost = technology.InitialCost;
+            initialCost = majorEmpire.DepartmentOfTheTreasury.ApplyCostModifiers(technology.TechnologyDefinition, initialCost);
+            initialCost *= Amplitude.Mercury.Sandbox.Sandbox.GameSpeedController.CurrentGameSpeedDefinition.TechnologyCostMultiplier;
+            return FixedPoint.Round(initialCost);
+        }
+        //*/
     }
 }

@@ -1353,7 +1353,7 @@ namespace Gedemon.Uchronia
 				PrepareForGiantEarthReference(currentWorld);
 			}
 
-			ModLoading.BuildModdedLists();
+			ModLoading.BuildModdedTCL();
 
 			if (MapCanUseGiantEarthReference)
 			{

@@ -154,6 +154,7 @@
     <Compile Include="CityMap.cs" />
     <Compile Include="DatabaseUtils.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfTheInteriorPatch.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfSciencePatch.cs" />
     <Compile Include="MapUtils.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\SandboxPatch.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfDefensePatch.cs" />

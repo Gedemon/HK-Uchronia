@@ -141,13 +141,13 @@ namespace Gedemon.Uchronia
             }
         }
 
-        public static void BuildModdedLists()
+        public static void ModPreload()
         {
-            Diagnostics.LogError($"[Gedemon] [ModLoading] in BuildModdedLists...");
+            Diagnostics.LogError($"[Gedemon] [ModLoading] in ModPreload...");
 
             string basefolder = Amplitude.Framework.Application.GameDirectory;
             List<string> folders = new List<string> { System.IO.Path.Combine(basefolder, TerrainSave.MapsSubDirectory), System.IO.Path.Combine(basefolder, RuntimeModuleFolders.Public.Name), System.IO.Path.Combine(basefolder, RuntimeModuleFolders.Community.Name) };
-            foreach(string path in folders)
+            foreach (string path in folders)
             {
                 Diagnostics.Log($"[Gedemon] searching for .json files in {path}");
                 if (Directory.Exists(path))
@@ -179,6 +179,11 @@ namespace Gedemon.Uchronia
                     }
                 }
             }
+
+        }
+        public static void BuildModdedTCL() // called when the territory are loaded (to get the correct hash), but before they are localized and before starting position placement
+        {
+            Diagnostics.LogError($"[Gedemon] [ModLoading] in BuildModdedLists...");
             //
             //string path = Amplitude.Framework.Application.GameDirectory; // + "\\" + TerrainSave.MapsSubDirectory + "\\";
 
@@ -509,8 +514,15 @@ namespace Gedemon.Uchronia
         }
 
 
-        public static void OnSandboxStarted()
+        public static void AfterSandboxStarted()
         {
+            // after sandbox has started
+        }
+
+        public static void OnMainMenuLoaded()
+        {
+            ModPreload();
+            DatabaseUtils.OnModPreloaded();
         }
         public static void OnExitSandbox()
         {
@@ -597,6 +609,14 @@ namespace Gedemon.Uchronia
                 }
             }
             return true;
+        }
+
+        [HarmonyPatch("TryMountAssetBundle")]
+        [HarmonyPatch(new Type[] { typeof(string), typeof(string), typeof(uint), typeof(IAssetProvider), typeof(Amplitude.Framework.Asset.AssetBundle.Options) }, new ArgumentType[] { ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Out, ArgumentType.Normal })]
+        [HarmonyPostfix]
+        public static void TryMountAssetBundlePost(string providerName, string path, uint assetBundleFlags, Amplitude.Framework.Asset.AssetBundle.Options options)
+        {
+            
         }
 
         [HarmonyPatch("UnmountAssetBundle")]

@@ -21,9 +21,8 @@ namespace Gedemon.Uchronia
 
 	//*
 	[HarmonyPatch(typeof(Sandbox))]
-	public class TCL_Sandbox
+	public class Sandbox_Patch
 	{
-
 		//*
 		[HarmonyPatch("Load")]
 		[HarmonyPatch(new Type[] { typeof(StorageContainerInfo) } )]
@@ -31,7 +30,7 @@ namespace Gedemon.Uchronia
 		public static bool Load(Sandbox __instance, StorageContainerInfo storageContainerInfo)
 		{
 			{
-				Diagnostics.LogError($"[Gedemon] [Sandbox] [Load] {storageContainerInfo.GetMetadata("GameSaveMetadata::Title")}, {storageContainerInfo.GetMetadata("GameSaveMetadata::DateTime")}");
+				Diagnostics.LogWarning($"[Gedemon] [Sandbox] [Load] {storageContainerInfo.GetMetadata("GameSaveMetadata::Title")}, {storageContainerInfo.GetMetadata("GameSaveMetadata::DateTime")}");
 			}
 			return true;
 		}
@@ -43,8 +42,8 @@ namespace Gedemon.Uchronia
 		{
 			Diagnostics.LogWarning($"[Gedemon] [ThreadStarted] postfix");
 
-			DatabaseUtils.OnSandboxStarted();
-			ModLoading.OnSandboxStarted();
+			ModLoading.AfterSandboxStarted();
+			DatabaseUtils.AfterSandboxStarted();
 
 			if (!CurrentGame.Data.IsInitialized)
             {
@@ -54,6 +53,10 @@ namespace Gedemon.Uchronia
 				CurrentGame.Data.IsInitialized = true;
 			}
 
+			Uchronia.SandboxInitialized = true;
+
+			// After initialization
+			Science.OnSandboxInitialized();
 		}
 
 		[HarmonyPatch("ThreadStart")]
@@ -68,6 +71,7 @@ namespace Gedemon.Uchronia
 			CurrentGame.OnExitSandbox();
 			CultureUnlock.OnExitSandbox();
 			BattleSaveExtension.OnExitSandbox();
+			Uchronia.SandboxInitialized = false;
 		}
 
 
@@ -78,6 +82,8 @@ namespace Gedemon.Uchronia
 			Diagnostics.LogWarning($"[Gedemon] entering Sandbox, ThreadStart");
 			MajorEmpireSaveExtension.OnSandboxStart();
 			BattleSaveExtension.OnSandboxStart();
+
+			DatabaseUtils.OnSandboxStart();
 			/*
 			Sandbox.Frame = 1;
 			SimulationEvent.CurrentPermission = SimulationEvent.Permission.Forbidden;

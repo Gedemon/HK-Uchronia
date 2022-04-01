@@ -172,7 +172,6 @@ namespace Gedemon.Uchronia
 					return true; // no limits for neolithic spawn (animals)
 				}
 
-				bool isAdjacentAnotherMinor = false;
 				if (__instance.CurrentMinorFactionEraDefinition.EraIndex < 2) // prevent adjacent spawns in ancient era
 				{
 					for (int j = 0; j < territory.AdjacentTerritories.Length; j++)
@@ -185,8 +184,6 @@ namespace Gedemon.Uchronia
 							//Diagnostics.Log($"[Gedemon] MinorFactionManager, IsTerritoryValidForSpawnFaction for {CultureUnlock.GetTerritoryName(territory.Index)}, has district {mainDistrict.DistrictType}");
 							if (mainDistrict.Empire is MinorEmpire)
 							{
-								//isAdjacentAnotherMinor = true;
-								//break;
 								__result = false;
 								return false;
 							}

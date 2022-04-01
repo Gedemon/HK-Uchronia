@@ -141,9 +141,9 @@ namespace Gedemon.Uchronia
             }
         }
 
-        public static void ModPreload()
+        public static void Modload(bool preLoad = true)
         {
-            Diagnostics.LogError($"[Gedemon] [ModLoading] in ModPreload...");
+            Diagnostics.LogError($"[Gedemon] [ModLoading] in Modload (preLoad = {preLoad})");
 
             string basefolder = Amplitude.Framework.Application.GameDirectory;
             List<string> folders = new List<string> { System.IO.Path.Combine(basefolder, TerrainSave.MapsSubDirectory), System.IO.Path.Combine(basefolder, RuntimeModuleFolders.Public.Name), System.IO.Path.Combine(basefolder, RuntimeModuleFolders.Community.Name) };
@@ -155,16 +155,23 @@ namespace Gedemon.Uchronia
                     DirectoryInfo directoryInfo = new DirectoryInfo(path);
                     if (directoryInfo.Exists)
                     {
-                        Diagnostics.Log($"[Gedemon] searching *TCL.json files in {directoryInfo.FullName}");
-                        string searchPatternJSON = "*TCL.json";
-                        //SearchOption searchOption = (recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
-                        FileInfo[] filesJSON = directoryInfo.GetFiles(searchPatternJSON, SearchOption.AllDirectories);
-                        foreach (FileInfo fileInfo in filesJSON)
+                        // JON are only used for TCL and can be always preloaded
+
+                        if(preLoad)
                         {
-                            Diagnostics.LogWarning($"[Gedemon] loading *TCL.json file : ({fileInfo.FullName})");
-                            StreamReader stream = fileInfo.OpenText();
-                            ModLoading.AddTCLfromJSON(stream.ReadToEnd(), fileInfo.FullName);
+                            Diagnostics.Log($"[Gedemon] searching *TCL.json files in {directoryInfo.FullName}");
+                            string searchPatternJSON = "*TCL.json";
+                            //SearchOption searchOption = (recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
+                            FileInfo[] filesJSON = directoryInfo.GetFiles(searchPatternJSON, SearchOption.AllDirectories);
+                            foreach (FileInfo fileInfo in filesJSON)
+                            {
+                                Diagnostics.LogWarning($"[Gedemon] loading *TCL.json file : ({fileInfo.FullName})");
+                                StreamReader stream = fileInfo.OpenText();
+                                ModLoading.AddTCLfromJSON(stream.ReadToEnd(), fileInfo.FullName);
+                            }
                         }
+
+                        // Some XML files content may require the engine to be loaded first
 
                         Diagnostics.Log($"[Gedemon] searching *.XML files in {directoryInfo.FullName}");
                         string searchPatternXML = "*.XML";
@@ -174,12 +181,11 @@ namespace Gedemon.Uchronia
                         {
                             Diagnostics.LogWarning($"[Gedemon] loading *.XML file : ({fileInfo.FullName})");
                             //StreamReader stream = fileInfo.OpenText();
-                            DatabaseUtils.LoadXML(fileInfo.FullName, fileInfo.FullName);
+                            DatabaseUtils.LoadXML(fileInfo.FullName, fileInfo.FullName, inputIsText : false, preLoad);
                         }
                     }
                 }
             }
-
         }
         public static void BuildModdedTCL() // called when the territory are loaded (to get the correct hash), but before they are localized and before starting position placement
         {
@@ -514,6 +520,12 @@ namespace Gedemon.Uchronia
         }
 
 
+        public static void OnSandboxStart()
+        {
+            // when sandbox started
+            Modload(preLoad : false);
+        }
+
         public static void AfterSandboxStarted()
         {
             // after sandbox has started
@@ -521,7 +533,7 @@ namespace Gedemon.Uchronia
 
         public static void OnMainMenuLoaded()
         {
-            ModPreload();
+            Modload(preLoad : true);
             DatabaseUtils.OnModPreloaded();
         }
         public static void OnExitSandbox()

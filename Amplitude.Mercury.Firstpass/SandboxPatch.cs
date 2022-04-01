@@ -79,10 +79,18 @@ namespace Gedemon.Uchronia
 		[HarmonyPrefix]
 		public static bool ThreadStart(Sandbox __instance, object parameter)
 		{
-			Diagnostics.LogWarning($"[Gedemon] entering Sandbox, ThreadStart");
+			Diagnostics.LogWarning($"[Gedemon][Sandbox] ThreadStart");
+
+			SandboxStartSettings startSetting = parameter as SandboxStartSettings;
+            if (startSetting != null)
+			{
+				//Diagnostics.LogWarning($"[Gedemon][Sandbox] ThreadStart: startSetting = {startSetting.}");
+			}
+
 			MajorEmpireSaveExtension.OnSandboxStart();
 			BattleSaveExtension.OnSandboxStart();
 
+			ModLoading.OnSandboxStart();
 			DatabaseUtils.OnSandboxStart();
 			/*
 			Sandbox.Frame = 1;

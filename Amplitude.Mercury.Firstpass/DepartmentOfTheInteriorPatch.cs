@@ -91,7 +91,11 @@ namespace Gedemon.Uchronia
 		public static bool ChangeSettlementOwner(DepartmentOfTheInterior __instance, Settlement settlement, Empire newEmpireOwner, bool keepCaptured = true)
 		{
 
-			//Diagnostics.LogWarning($"[Gedemon] [DepartmentOfTheInterior] ChangeSettlementOwner {settlement.EntityName} at {settlement.WorldPosition}, empire index = {__instance.Empire.Index}, new empire index = {newEmpireOwner.Index}");
+            //Diagnostics.LogWarning($"[Gedemon] [DepartmentOfTheInterior] ChangeSettlementOwner {settlement.EntityName} at {settlement.WorldPosition}, empire index = {__instance.Empire.Index}, new empire index = {newEmpireOwner.Index}");
+			if (settlement.SettlementStatus == Amplitude.Mercury.Data.Simulation.SettlementStatuses.City)
+			{
+				CityMap.UpdateSettlementName(settlement);			
+			}
 
 			CultureChange.SaveHistoricDistrictVisuals(settlement.Empire.Entity);
 			return true;

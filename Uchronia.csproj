@@ -151,10 +151,13 @@
     <Compile Include="Amplitude.Framework\OptionManagerPatch.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\BattleAutoResolverPatch.cs" />
     <Compile Include="BattlePosture.cs" />
+    <Compile Include="Amplitude.Mercury.Firstpass\Battle_Patch.cs" />
     <Compile Include="CityMap.cs" />
     <Compile Include="DatabaseUtils.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfTheInteriorPatch.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfSciencePatch.cs" />
+    <Compile Include="DepartmentOfIndustryPatch.cs" />
+    <Compile Include="Districts.cs" />
     <Compile Include="MapUtils.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\SandboxPatch.cs" />
     <Compile Include="Amplitude.Mercury.Firstpass\DepartmentOfDefensePatch.cs" />
@@ -178,6 +181,7 @@
     <Compile Include="HumankindModTool\GameOptionInfo.cs" />
     <Compile Include="HumankindModTool\GameOptionStateInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="UI.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

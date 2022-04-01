@@ -2,24 +2,15 @@
 using Amplitude.Mercury.Simulation;
 using HarmonyLib;
 using Amplitude.Mercury.Sandbox;
-using UnityEngine;
 using Amplitude;
-using Amplitude.Framework.Session;
-using Amplitude.Mercury.Session;
 using Amplitude.Mercury.Data.Simulation;
 using Amplitude.Mercury.Interop;
 using Amplitude.Mercury;
-using Amplitude.Mercury.AI.Brain.Analysis.ArmyBehavior;
-using Amplitude.AI.Heuristics;
-using Amplitude.Mercury.AI.Brain.Actuators;
-using Amplitude.Mercury.AI.Brain.AnalysisData.Army;
-using Amplitude.Mercury.AI.Brain.Analysis.Military;
-using Amplitude.Mercury.AI.Battle;
-using Amplitude.Mercury.AI;
 using Diagnostics = Amplitude.Diagnostics;
 using BattleGroupRoleType = Amplitude.Mercury.Interop.BattleGroupRoleType;
 using System;
 using Amplitude.Framework.Simulation;
+using Amplitude.Mercury.AI;
 
 namespace Gedemon.Uchronia
 {
@@ -68,7 +59,7 @@ namespace Gedemon.Uchronia
 			}
         }
 
-		static public FixedPoint GetQualityFactor(FixedPoint veterancyLevel)
+		static public FixedPoint GetVeterancyModifier(FixedPoint veterancyLevel)
         {
 			FixedPoint green = (FixedPoint)0.5;
 			FixedPoint average = (FixedPoint)0.8;
@@ -85,7 +76,20 @@ namespace Gedemon.Uchronia
 			{
 				return good + (veterancyLevel / 6); // [1.3 - 1.5]
 			}
-        }
+		}
+		static public FixedPoint GetFortificationModifier(FixedPoint fortificationStrength)
+		{
+			FixedPoint divider = 100 - fortificationStrength; // max fortificationStrength should be 95 at level 4 (shelter) but can get bonuses from terrain ?
+
+			if (divider == 100)
+				return 1;
+
+			if (divider > 0)
+				return 1 + (1 - 1 / divider); // [1.01 - 1.99]
+			else
+				return 2;
+		}
+
 
 		static public FixedPoint GetMoveModifier(FixedPoint attackerMoves, FixedPoint defenderMoves)
 		{
@@ -152,7 +156,7 @@ namespace Gedemon.Uchronia
 				AverageVeterency	= TotalVeterency / NumUnits;
 				AverageExperience	= TotalExperience / NumUnits;
 
-				CombatStrength		= TotalCombat * QJM.GetQualityFactor(AverageVeterency);
+				CombatStrength		= TotalCombat * QJM.GetVeterancyModifier(AverageVeterency);
 			}
 			else
             {
@@ -302,22 +306,76 @@ namespace Gedemon.Uchronia
 		[HarmonyPatch(nameof(CompareUnitByStrength))]
 		public static bool CompareUnitByStrength(ref UnitSimplifiedData left, ref UnitSimplifiedData right, ref int __result)
 		{
-			//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] CompareUnitByStrength");
-			int num = -left.IsFortification.CompareTo(right.IsFortification);
+			int num = left.IsFortification.CompareTo(right.IsFortification); //-left.IsFortification.CompareTo(right.IsFortification);
 			if (num == 0)
 			{
 				FixedPoint combatStrength = left.CombatStrength * left.HealthRatio;
 				num = combatStrength.CompareTo(right.CombatStrength * right.HealthRatio);
 
-				//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] CompareUnitByStrength compare left[{left.CombatStrength}x{left.HealthRatio}] to right[{right.CombatStrength}x{right.HealthRatio}] = {num}");
+				//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] CompareUnitByStrength compare left #{left.GUID} [{left.CombatStrength}x{left.HealthRatio}] to right #{right.GUID} [{right.CombatStrength}x{right.HealthRatio}] = {num}");
 
 				if (num == 0)
 				{
 					num = left.GUID.CompareTo(right.GUID);
 				}
 			}
+            else
+            {
+				//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] CompareUnitByStrength compare left #{left.GUID} [IsFortification={left.IsFortification}] to right #{right.GUID} [IsFortification={right.IsFortification}]={num}");
+			}
 
-			__result = num;
+			__result = -num;
+			return false;
+		}
+
+		[HarmonyPrefix]
+		[HarmonyPatch(nameof(GetAutoResolveResultForBattle))]
+		internal static bool GetAutoResolveResultForBattle(Battle battle, AutoResolveBattleContext context, bool isSortie, bool isPreview)
+		{
+			// remove or change apply terrain bonus ? remove fortification and do calculation based on health left & value ?
+			using (new PerformanceSample("Auto resolve battle", PerformanceSampleCategory.BattleResult))
+			{
+				// Gedemon <<<<<
+				LogListBattleGroupArmies(battle.AttackerGroup);
+				LogListBattleGroupArmies(battle.DefenderGroup);
+				// Gedemon >>>>>
+				bool num = battle.Siege != null;
+				BattleGroup obj = (isSortie ? battle.DefenderGroup : battle.AttackerGroup);
+				BattleGroup battleGroup = (isSortie ? battle.AttackerGroup : battle.DefenderGroup);
+				int fortificationCount = 0;
+				BattleAutoResolver.FillUnitsData(obj, ref context.AttackerUnits);
+				BattleAutoResolver.FillUnitsData(battleGroup, ref context.DefenderUnits);
+				BattleAutoResolver.AutoResolveTerrainData attackerTerrainData = BattleAutoResolver.ComputeTerrainBonus(obj.DeploymentZone);
+				BattleAutoResolver.AutoResolveTerrainData defenderTerrainData = BattleAutoResolver.ComputeTerrainBonus(battleGroup.DeploymentZone);
+				//BattleAutoResolver.ApplyTerrainDataBonus(context.AttackerUnits, ref attackerTerrainData, context.DefenderUnits, ref defenderTerrainData);
+				ApplyTerrainDataBonus(context.AttackerUnits, ref attackerTerrainData, context.DefenderUnits, ref defenderTerrainData);
+				if (num)
+				{
+					ListOfStruct<UnitSimplifiedData> listOfStruct = ((!isSortie) ? context.DefenderUnits : context.AttackerUnits);
+					if (listOfStruct != null)
+					{
+						context.DistrictWorkList.Clear();
+						UnitSimplifiedData fortificationUnit = UnitSimplifiedData.Empty;
+						BattleAutoResolver.CreateSimplifiedFortificationUnit(battle.Siege.BesiegedCity.Entity, out fortificationUnit, out fortificationCount, context.DistrictWorkList);
+						if (fortificationCount > 0)
+						{
+							listOfStruct.Add(ref fortificationUnit);
+						}
+					}
+				}
+				bool isOnWaterOnly = true;
+				int count = battle.Arena.Area.Positions.Count;
+				for (int i = 0; i < count; i++)
+				{
+					if (!Amplitude.Mercury.Sandbox.Sandbox.World.IsPositionInWater(battle.Arena.Area.Positions[i]))
+					{
+						isOnWaterOnly = false;
+						break;
+					}
+				}
+				context.Winner = BattleAutoResolver.ComputeAutoResolve(ref context.AttackerUnits, ref context.DefenderUnits, fortificationCount, ref context.TotalFortificationDamage, isOnWaterOnly, context.UnitProperties, isPreview, battle);
+			}
+
 			return false;
 		}
 
@@ -341,6 +399,9 @@ namespace Gedemon.Uchronia
 			bool IsSortie = battle.Siege != null && battle.Siege.SiegeState == SiegeStates.Sortie;
 			bool IsRetreating = battleExtension.DefenderWasRetreating;
 
+			// to get/set correct attacker/defender posture
+			battleExtension.SiegeState = battle.Siege != null ? battle.Siege.SiegeState : SiegeStates.None;
+
 			Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : battle GUID = {battle.GUID}, fortificationCount = {fortificationCount}, IsAssault = {IsAssault}, DefenderWasRetreating = {IsRetreating}");
 
 			int attackerCount = attackerUnits.Length;
@@ -361,214 +422,21 @@ namespace Gedemon.Uchronia
 			FixedPoint defenderInitialHealth = defenderGroupStats.TotalHealth;
 
 			#region AI POSTURE DECISION
+
+			// to do : Defending AI should not retreat from cities
 			Empire attackerEmpire = Sandbox.Empires[battle.InstigatorLeaderEmpireIndex];
-			if (!attackerEmpire.IsControlledByHuman)
-			{
-				FixedPoint postureRNG100 = RandomHelper.Next((int)(ulong)battle.GUID + (int)(ulong)attackerEmpire.GUID + SandboxManager.Sandbox.Turn, 0, 100);
-				FixedPoint ratioRNG = postureRNG100 / 100;
-				Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerEmpire with {battleExtension.AttackerPosture} called RandomHelper.Next [0-100]: RNG = {postureRNG100}, ratioRNG = {ratioRNG}");
-				if (HasAnimal(attackerUnits))
-				{
-					battleExtension.AttackerPosture = postureRNG100 > 50 ? Posture.Pursuit : postureRNG100 > 25 ? Posture.AllOutAttack : Posture.DeliberateAttack;
-					Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerAnimal AI chosed {battleExtension.AttackerPosture}");
-					goto DecisionTaken;
-				}
-				else
-				{
-					if (HasAnimal(defenderUnits))
-					{
-						battleExtension.AttackerPosture = postureRNG100 > 25 ? Posture.Pursuit : Posture.AllOutAttack;
-						Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerEmpire AI chosed {battleExtension.AttackerPosture} against animals");
-						goto DecisionTaken;
-					}
-
-					// logical decisions
-					FixedPoint logicalDecisionValue = (attackerGroupStats.AverageVeterency * 10) + 50; // [50-80]
-					if (logicalDecisionValue >= postureRNG100)
-					{
-						ratioRNG = (postureRNG100 - logicalDecisionValue) / 100;
-						// confirm attack if stronger
-						if (attackerGroupStats.CombatStrength > defenderGroupStats.CombatStrength)
-						{
-							// very specific decision
-							FixedPoint veryLogicalDecisionValue = (attackerGroupStats.AverageVeterency * 10) + 10; // [10-40]
-							if (veryLogicalDecisionValue >= postureRNG100)
-							{
-								FixedPoint MoveModifier = QJM.GetMoveModifier(attackerGroupStats.AverageMoves, defenderGroupStats.AverageMoves);
-								if (attackerGroupStats.AverageVeterency > QJM.VeterancyForMobileAttack && attackerGroupStats.AverageVeterency * MoveModifier > defenderGroupStats.AverageVeterency)
-								{
-									battleExtension.AttackerPosture = Posture.MobileAttack;
-									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, MoveModifier = {MoveModifier}, Veterency = {attackerGroupStats.AverageVeterency} vs {defenderGroupStats.AverageVeterency}");
-									goto DecisionTaken;
-								}
-							}
-							// other decisions
-							if (attackerGroupStats.CombatStrength * QJM.VeryHighReducingModifier > defenderGroupStats.CombatStrength)
-							{
-								battleExtension.AttackerPosture = ratioRNG > (FixedPoint)0.5 ? Posture.Pursuit : Posture.AllOutAttack;
-								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}");
-								goto DecisionTaken;
-							}
-							battleExtension.AttackerPosture = Posture.DeliberateAttack;
-							Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}");
-							goto DecisionTaken;
-						}
-						// Other posture
-						else
-						{
-							// very specific decisions
-							FixedPoint veryLogicalDecisionValue = (attackerGroupStats.AverageVeterency * 10) + 10; // [10-40]
-							if (veryLogicalDecisionValue >= postureRNG100)
-							{
-								FixedPoint MoveModifier = QJM.GetMoveModifier(attackerGroupStats.AverageMoves, defenderGroupStats.AverageMoves);
-								if (attackerGroupStats.AverageVeterency > QJM.VeterancyForMobileAttack && attackerGroupStats.AverageVeterency * MoveModifier * QJM.MediumReducingModifier > defenderGroupStats.AverageVeterency) // case where a weaker force can inflict more damage to a stronger attacking oponent
-								{
-									battleExtension.AttackerPosture = Posture.MobileAttack;
-									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, MoveModifier = {MoveModifier}, Veterency = {attackerGroupStats.AverageVeterency} vs {defenderGroupStats.AverageVeterency}");
-									goto DecisionTaken;
-								}
-
-								if (attackerGroupStats.CombatModifier < defenderGroupStats.CombatModifier * QJM.MediumReducingModifier && attackerGroupStats.AverageMoves < defenderGroupStats.AverageMoves) // delaying for more than one turn
-								{
-									battleExtension.AttackerPosture = Posture.Delay;
-									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}, Moves = {attackerGroupStats.AverageMoves} vs {defenderGroupStats.AverageMoves}");
-									goto DecisionTaken;
-								}
-							}
-
-							// very specific decision
-							if (veryLogicalDecisionValue >= postureRNG100)
-							{
-								if (attackerGroupStats.CombatModifier < defenderGroupStats.CombatModifier * QJM.HighReducingModifier && attackerGroupStats.AverageMoves > defenderGroupStats.AverageMoves)
-								{
-									battleExtension.AttackerPosture = Posture.Delay;
-									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}, Moves = {attackerGroupStats.AverageMoves} vs {defenderGroupStats.AverageMoves}");
-									goto DecisionTaken;
-								}
-							}
-
-							// other decisions
-							if (attackerGroupStats.CombatStrength < defenderGroupStats.CombatStrength * QJM.VeryHighReducingModifier)
-							{
-								battleExtension.AttackerPosture = ratioRNG > (FixedPoint)0.5 ? Posture.Delay : Posture.Retreat;
-								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}");
-								goto DecisionTaken;
-							}
-
-
-							if (attackerGroupStats.CombatStrength < defenderGroupStats.CombatStrength * QJM.MediumReducingModifier)
-							{
-								battleExtension.AttackerPosture = ratioRNG > (FixedPoint)0.5 ? Posture.PreparedDefense : Posture.HastyDefense;
-								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}");
-								goto DecisionTaken;
-							}
-						}
-					}
-					// unexpected/risky decisions
-					else
-					{
-
-					}
-					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI kept {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}");
-
-
-				}
-
-			DecisionTaken:;
-			}
+			ResolvePostureForAttackingAI(attackerEmpire, battle, ref battleExtension, attackerUnits, defenderUnits, attackerGroupStats, defenderGroupStats);
 
 			Empire defenderEmpire = Sandbox.Empires[battle.NotInstigatorLeaderEmpireIndex];
-			if (!defenderEmpire.IsControlledByHuman)
-			{
-				FixedPoint postureRNG100 = RandomHelper.Next((int)(ulong)battle.GUID + (int)(ulong)defenderEmpire.GUID + SandboxManager.Sandbox.Turn, 0, 100);
-				FixedPoint ratioRNG = postureRNG100 / 100;
-				Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire with {battleExtension.DefenderPosture} called RandomHelper.Next [0-100]: RNG = {postureRNG100}, ratioRNG = {ratioRNG}");
-				if (HasAnimal(defenderUnits))
-				{
-					battleExtension.DefenderPosture = postureRNG100 > 50 ? Posture.Retreat : Posture.Pursuit;
-					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderAnimal AI chosed {battleExtension.DefenderPosture}");
-					goto DecisionTaken;
-				}
-				else
-				{
-					// logical decisions
-					FixedPoint logicalDecisionValue = (defenderGroupStats.AverageVeterency * 10) + 50; // [50-80]
-					if (logicalDecisionValue >= postureRNG100)
-					{
-						ratioRNG = (postureRNG100 - logicalDecisionValue) / 100;
-						// counter-attack if much stronger
-						if (defenderGroupStats.CombatStrength * QJM.HighReducingModifier > attackerGroupStats.CombatStrength)
-						{
-							// very specific decision
-							FixedPoint veryLogicalDecisionValue = (defenderGroupStats.AverageVeterency * 10) + 10; // [10-40]
-							if (veryLogicalDecisionValue >= postureRNG100)
-							{
-								FixedPoint MoveModifier = QJM.GetMoveModifier(defenderGroupStats.AverageMoves, attackerGroupStats.AverageMoves);
-								if (defenderGroupStats.AverageVeterency > QJM.VeterancyForMobileAttack && defenderGroupStats.AverageVeterency * MoveModifier > attackerGroupStats.AverageVeterency)
-								{
-									battleExtension.DefenderPosture = Posture.MobileAttack;
-									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (veryLogicalDecisionValue = {veryLogicalDecisionValue}, MoveModifier = {MoveModifier}, Veterency = {defenderGroupStats.AverageVeterency} vs {attackerGroupStats.AverageVeterency}");
-									goto DecisionTaken;
-								}
-							}
-							// other decisions
-							if (defenderGroupStats.CombatStrength * QJM.VeryHighReducingModifier > attackerGroupStats.CombatStrength)
-							{
-								battleExtension.DefenderPosture = ratioRNG > (FixedPoint)0.5 ? Posture.Pursuit : Posture.AllOutAttack;
-								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}");
-								goto DecisionTaken;
-							}
-							battleExtension.DefenderPosture = Posture.DeliberateAttack;
-							Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (logicalDecisionValue = {logicalDecisionValue}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}");
-							goto DecisionTaken;
-						}
-						// Defensive posture
-						else
-						{
-							// very specific decision
-							FixedPoint veryLogicalDecisionValue = (defenderGroupStats.AverageVeterency * 10) + 10; // [10-40]
-							if (veryLogicalDecisionValue >= postureRNG100)
-							{
-								FixedPoint attackerMobilityFactor = attackerGroupStats.AverageMoves * QJM.GetQualityFactor(attackerGroupStats.AverageVeterency);
-								FixedPoint defenderMobilityFactor = defenderGroupStats.AverageMoves * QJM.GetQualityFactor(defenderGroupStats.AverageVeterency);
-
-								if (defenderGroupStats.CombatModifier < attackerGroupStats.CombatModifier * QJM.MediumReducingModifier && defenderMobilityFactor > attackerMobilityFactor * QJM.MediumReducingModifier)
-								{
-									battleExtension.DefenderPosture = Posture.Delay;
-									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (veryLogicalDecisionValue = {veryLogicalDecisionValue}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}, Mobility = {defenderMobilityFactor} vs {attackerMobilityFactor}");
-									goto DecisionTaken;
-								}
-							}
-
-							// other decisions
-							if (defenderGroupStats.CombatStrength < attackerGroupStats.CombatStrength * QJM.MediumReducingModifier)
-							{
-								battleExtension.DefenderPosture = ratioRNG > (FixedPoint)0.5 ? Posture.Delay : Posture.Retreat;
-								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}");
-								goto DecisionTaken;
-							}
-
-							battleExtension.DefenderPosture = ratioRNG > (FixedPoint)0.5 ? Posture.PreparedDefense : Posture.HastyDefense;
-							Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}");
-							goto DecisionTaken;
-						}
-					}
-					// unexpected/risky decisions
-					else
-					{
-
-					}
-				}
-
-			DecisionTaken:;
-			}
+			ResolvePostureForDefendingAI(defenderEmpire, battle, ref battleExtension, attackerUnits, defenderUnits, attackerGroupStats, defenderGroupStats);
 
 			attackerGroupStats.GroupPosture = battleExtension.AttackerPosture;
 			defenderGroupStats.GroupPosture = battleExtension.DefenderPosture;
 
 			#endregion
 
-			#region BATTLE
+			#region COMBAT LOOP
+
 			for (int roundNum = 0; roundNum < MaxRound; roundNum++)
 			{
 				Posture attackerCurrentPosture = battleExtension.AttackerPosture;
@@ -636,7 +504,7 @@ namespace Gedemon.Uchronia
 				FixedPoint attackerStartRoundHealth = attackerGroupStats.TotalHealth;
 				FixedPoint defenderStartRoundHealth = defenderGroupStats.TotalHealth;
 
-				phasePresentation += Environment.NewLine + $"Att:[{attackerCurrentPosture}][{attackerCount}[Population]][{attackerGroupStats.AverageMoves}[MovementSpeed]][{attackerGroupStats.AverageCombat}[CombatStrength]][{(int)(attackerGroupStats.AverageHealth * 100)}%[Health]][{attackerGroupStats.AverageVeterency}[Veterancy]";
+				phasePresentation += Environment.NewLine + $"Att:[{attackerCurrentPosture}][{attackerCount}[Population]][{attackerGroupStats.AverageMoves}[MovementSpeed]][{attackerGroupStats.AverageCombat}[CombatStrength]][{(int)(attackerGroupStats.AverageHealth * 100)}%[Health]][{attackerGroupStats.AverageVeterency}[Veterancy]]";
 				phasePresentation += Environment.NewLine + $"Def:[{defenderCurrentPosture}][{defenderCount}[Population]][{defenderGroupStats.AverageMoves}[MovementSpeed]][{defenderGroupStats.AverageCombat}[CombatStrength]][{(int)(defenderGroupStats.AverageHealth * 100)}%[Health]][{defenderGroupStats.AverageVeterency}[Veterancy]][{fortificationCount}[FortificationShadowed]]";
 				battleExtension.BattleSummary += roundNum == 0 ? phasePresentation : Environment.NewLine + Environment.NewLine + phasePresentation;
 
@@ -650,8 +518,8 @@ namespace Gedemon.Uchronia
 				if (BattlePosture.IsAbandonCombat(battleExtension.AttackerPosture))
 				{
 					bool canEscape = false;
-					FixedPoint attackerMobilityFactor = attackerGroupStats.AverageMoves * QJM.GetQualityFactor(attackerGroupStats.AverageVeterency);
-					FixedPoint defenderMobilityFactor = defenderGroupStats.AverageMoves * QJM.GetQualityFactor(defenderGroupStats.AverageVeterency);
+					FixedPoint attackerMobilityFactor = attackerGroupStats.AverageMoves * QJM.GetVeterancyModifier(attackerGroupStats.AverageVeterency);
+					FixedPoint defenderMobilityFactor = defenderGroupStats.AverageMoves * QJM.GetVeterancyModifier(defenderGroupStats.AverageVeterency);
 					switch (battleExtension.DefenderPosture)
 					{
 						case Posture.Pursuit:
@@ -676,8 +544,8 @@ namespace Gedemon.Uchronia
 				if (BattlePosture.IsAbandonCombat(battleExtension.DefenderPosture))
 				{
 					bool canEscape = false;
-					FixedPoint attackerMobilityFactor = attackerGroupStats.AverageMoves * QJM.GetQualityFactor(attackerGroupStats.AverageVeterency);
-					FixedPoint defenderMobilityFactor = defenderGroupStats.AverageMoves * QJM.GetQualityFactor(defenderGroupStats.AverageVeterency);
+					FixedPoint attackerMobilityFactor = attackerGroupStats.AverageMoves * QJM.GetVeterancyModifier(attackerGroupStats.AverageVeterency);
+					FixedPoint defenderMobilityFactor = defenderGroupStats.AverageMoves * QJM.GetVeterancyModifier(defenderGroupStats.AverageVeterency);
 					switch (battleExtension.AttackerPosture)
 					{
 						case Posture.Pursuit:
@@ -705,9 +573,27 @@ namespace Gedemon.Uchronia
 				BattlePosture.ResolvePosture(ref attackerGroupStats, ref defenderGroupStats, ref battleExtension);
 				BattlePosture.ResolvePosture(ref defenderGroupStats, ref attackerGroupStats, ref battleExtension);
 
+				//
+				// (1+(1-x))*ratio
+
 				// attacker combats
+				//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Sorting <attacker units>");
 				attackerUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
+				for (int i = 0; i < attackerUnits.Length; i++)
+				{
+					UnitSimplifiedData unit = attackerUnits.Data[i];
+					//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Unit #{unit.GUID} [{unit.CombatStrength}x{unit.HealthRatio}] = {unit.CombatStrength * unit.HealthRatio}");
+				}
+				//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Sorting <defender units>");
 				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
+				for (int i = 0; i < defenderUnits.Length; i++)
+				{
+					UnitSimplifiedData unit = defenderUnits.Data[i];
+					//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Unit #{unit.GUID} [{unit.CombatStrength}x{unit.HealthRatio}] = {unit.CombatStrength * unit.HealthRatio}");
+				}
+
+				Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Calling ResolveDamage: <attacker> = ATTACKER SIDE");
+
 				bool hadCombats = ResolveDamage(attackerUnits, attackerGroupStats.CombatModifier, defenderUnits, defenderGroupStats.CombatModifier, ref attackerCount, ref defenderCount, ref fortificationCount, ref totalFortificationDamage, isPreview, battle);
 				if (attackerCount == 0 || defenderCount == 0)
 				{
@@ -737,8 +623,22 @@ namespace Gedemon.Uchronia
 				}
 
 				// defender combats
+				Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Sorting <attacker units>");
 				attackerUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
+				for (int i = 0; i < attackerUnits.Length; i++)
+				{
+					ref UnitSimplifiedData unit = ref attackerUnits.Data[i];
+					Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Unit #{unit.GUID} [{unit.CombatStrength}x{unit.HealthRatio}] = {unit.CombatStrength* unit.HealthRatio}");
+				}
+				Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Sorting <defender units>");
 				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
+				for (int i = 0; i < defenderUnits.Length; i++)
+				{
+					ref UnitSimplifiedData unit = ref defenderUnits.Data[i];
+					Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Unit #{unit.GUID} [{unit.CombatStrength}x{unit.HealthRatio}] = {unit.CombatStrength * unit.HealthRatio}");
+				}
+
+				Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Calling ResolveDamage: <attacker> = DEFENDER SIDE");
 				if (!(hadCombats | ResolveDamage(defenderUnits, defenderGroupStats.CombatModifier, attackerUnits, attackerGroupStats.CombatModifier, ref defenderCount, ref attackerCount, ref fortificationCount, ref totalFortificationDamage, isPreview, battle)))
 				{
 					break;
@@ -806,7 +706,8 @@ namespace Gedemon.Uchronia
 
 			#endregion
 
-			#region RESULTS
+			#region BATTLE RESULTS
+
 			attackerGroupStats = new UnitGroupStats("Attacker");
 			defenderGroupStats = new UnitGroupStats("Defender");
 
@@ -879,7 +780,7 @@ namespace Gedemon.Uchronia
 				{
 					if (battleExtension.AttackerPosture == Posture.Retreat || battleExtension.AttackerPosture == Posture.Routed)
 					{
-						battleExtension.VictoryType = IsAssault ? BattleVictoryType.Attrition : BattleVictoryType.Retreat;
+						battleExtension.VictoryType = IsAssault ? BattleVictoryType.Attrition : BattleVictoryType.Retreat; // Main battle function doesn't handle correctly attacker retreat on assault, so use attrition (which will also cause the attacked to retreat)
 						battleExtension.BattleSummary += Environment.NewLine + Environment.NewLine + $"Defender wins the battle: Attacker retreating or routed";
 					}
 					else
@@ -938,13 +839,20 @@ namespace Gedemon.Uchronia
 
 				bool combatsEnded = false;
 
-				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached); // sort again (using str*healthRatio instead of str first then health) at each new loop to prevent a stronger unit in a stack to by attacked everyloop
+				//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ResolveDamage: Sorting <defender units>");
+				defenderUnits.Sort(BattleAutoResolver.CompareUnitByStrengthCached);
+				for (int u = 0; u < defenderUnits.Length; u++)
+				{
+					UnitSimplifiedData unit = defenderUnits.Data[u];
+					//Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] Unit #{unit.GUID} [{unit.CombatStrength}x{unit.HealthRatio}] = {unit.CombatStrength * unit.HealthRatio}");
+				}
 
 				for (int j = 0; j < defenderUnits.Length; j++)
 				{
 					ref UnitSimplifiedData defender = ref defenderUnits.Data[j];
 					if (defender.HealthRatio <= FixedPoint.Zero || ((!attacker.CanAttackUnits || defender.IsFortification) && (!attacker.CanAttackFortifications || !defender.IsFortification)))
 					{
+						Diagnostics.LogWarning($"[Gedemon][BattleAutoResolver] ignoring Defender#{defender.GUID} [j={j}]: (defender.HealthRatio[{defender.HealthRatio}] <= FixedPoint.Zero || ((!attacker.CanAttackUnits[{attacker.CanAttackUnits}] || defender.IsFortification[{defender.IsFortification}]) && (!attacker.CanAttackFortifications[{attacker.CanAttackFortifications}] || !defender.IsFortification[{defender.IsFortification}])))");
 						continue;
 					}
 
@@ -954,7 +862,7 @@ namespace Gedemon.Uchronia
 					FixedPoint defenderStrength = defender.CombatStrength * defender.HealthRatio * defenderModifier;
 
 
-					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ResolveDamage (str*healthRatio*mod) attacker[{attacker.GUID}] vs defender[{defender.GUID}] : attStr = {attacker.CombatStrength}*{attacker.HealthRatio}*{attackerModifier} = {attackerStrength} , defStr = {defender.CombatStrength}*{defender.HealthRatio}*{defenderModifier} = {defenderStrength}");
+					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ResolveDamage (str*healthRatio*mod) attacker[{attacker.GUID}] vs defender[{defender.GUID}] : attStr = {attacker.CombatStrength}*{attacker.HealthRatio}*{attackerModifier} = {attackerStrength} , defStr = {defender.CombatStrength}*{defender.HealthRatio}*{defenderModifier} = {defenderStrength}, defender.IsFortification = {defender.IsFortification}");
 
 					Damage damages = BattleAbilityHelper.GetDamages(attackerStrength, defenderStrength);
 					FixedPoint damageToDefender = (damages.MaximumDamage + damages.MinimumDamage) / damageDivider;
@@ -1106,8 +1014,8 @@ namespace Gedemon.Uchronia
 			if(currentPosture == Posture.Delay)
 			{
 
-				FixedPoint opponentGroupMobilityFactor = opponentGroupStats.AverageMoves * QJM.GetQualityFactor(opponentGroupStats.AverageVeterency);
-				FixedPoint currentGroupMobilityFactor = currentGroupStats.AverageMoves * QJM.GetQualityFactor(currentGroupStats.AverageVeterency);
+				FixedPoint opponentGroupMobilityFactor = opponentGroupStats.AverageMoves * QJM.GetVeterancyModifier(opponentGroupStats.AverageVeterency);
+				FixedPoint currentGroupMobilityFactor = currentGroupStats.AverageMoves * QJM.GetVeterancyModifier(currentGroupStats.AverageVeterency);
 
 				if (opponentGroupMobilityFactor - currentGroupMobilityFactor <= battleExtension.RoundNum * factorForRoundNumDelay)
 				{
@@ -1172,16 +1080,312 @@ namespace Gedemon.Uchronia
 			attackerGroupStats.ComputeStats();
 			defenderGroupStats.ComputeStats();
 
-			if(checkPosture)
+			FixedPoint attackerLossRatio = attackerStartRoundHealth > 0 ? FixedPoint.One - (attackerGroupStats.TotalHealth / attackerStartRoundHealth) : FixedPoint.One;
+			FixedPoint defenderLossRatio = defenderStartRoundHealth > 0 ? FixedPoint.One - (defenderGroupStats.TotalHealth / defenderStartRoundHealth) : FixedPoint.One;
+
+			battleExtension.BattleSummary += Environment.NewLine + $"Round Casualties: Attacker = -{(int)(attackerLossRatio * 100)}% [Health] | Defender = -{(int)(defenderLossRatio * 100)}% [Health]";
+
+			if (checkPosture)
 			{
 				battleExtension.AttackerPosture = ResolvePostureChange(ref battleExtension, attackerInitialHealth, attackerGroupStats, defenderInitialHealth, defenderGroupStats);
 				battleExtension.DefenderPosture = ResolvePostureChange(ref battleExtension, defenderInitialHealth, defenderGroupStats, attackerInitialHealth, attackerGroupStats);
 			}
 
-			FixedPoint attackerLossRatio = FixedPoint.One - (attackerGroupStats.TotalHealth / attackerStartRoundHealth);
-			FixedPoint defenderLossRatio = FixedPoint.One - (defenderGroupStats.TotalHealth / defenderStartRoundHealth);
+		}
+		public static void ResolvePostureForAttackingAI(Empire attackerEmpire, Battle battle, ref BattleExtension battleExtension, ListOfStruct<UnitSimplifiedData> attackerUnits, ListOfStruct<UnitSimplifiedData> defenderUnits, UnitGroupStats attackerGroupStats, UnitGroupStats defenderGroupStats)
+        {
+			if (!attackerEmpire.IsControlledByHuman)
+			{
+				FixedPoint postureRNG100 = RandomHelper.Next((int)(ulong)battle.GUID + (int)(ulong)attackerEmpire.GUID + SandboxManager.Sandbox.Turn, 0, 100);
+				FixedPoint ratioRNG = postureRNG100 / 100;
+				Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerEmpire with {battleExtension.AttackerPosture} called RandomHelper.Next [0-100]: RNG = {postureRNG100}, ratioRNG = {ratioRNG}");
+				if (HasAnimal(attackerUnits))
+				{
+					battleExtension.AttackerPosture = postureRNG100 > 50 ? Posture.Pursuit : postureRNG100 > 25 ? Posture.AllOutAttack : Posture.DeliberateAttack;
+					Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerAnimal AI chosed {battleExtension.AttackerPosture}");
+					goto DecisionTaken;
+				}
+				else
+				{
+					if (HasAnimal(defenderUnits))
+					{
+						battleExtension.AttackerPosture = postureRNG100 > 25 ? Posture.Pursuit : Posture.AllOutAttack;
+						Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : attackerEmpire AI chosed {battleExtension.AttackerPosture} against animals");
+						goto DecisionTaken;
+					}
 
-			battleExtension.BattleSummary += Environment.NewLine + $"Round Casualties: Attacker = -{(int)(attackerLossRatio * 100)}% [Health] | Defender = -{(int)(defenderLossRatio * 100)}% [Health]";
+					// logical decisions
+					FixedPoint logicalDecisionValue = (attackerGroupStats.AverageVeterency * 10) + 50; // [50-80]
+					if (logicalDecisionValue >= postureRNG100)
+					{
+						ratioRNG = (postureRNG100 - logicalDecisionValue) / 100;
+						// confirm attack if stronger
+						if (attackerGroupStats.CombatStrength > defenderGroupStats.CombatStrength)
+						{
+							// very specific decision
+							FixedPoint veryLogicalDecisionValue = (attackerGroupStats.AverageVeterency * 10) + 10; // [10-40]
+							if (veryLogicalDecisionValue >= postureRNG100)
+							{
+								FixedPoint MoveModifier = QJM.GetMoveModifier(attackerGroupStats.AverageMoves, defenderGroupStats.AverageMoves);
+								if (attackerGroupStats.AverageVeterency > QJM.VeterancyForMobileAttack && attackerGroupStats.AverageVeterency * MoveModifier > defenderGroupStats.AverageVeterency)
+								{
+									battleExtension.AttackerPosture = Posture.MobileAttack;
+									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, MoveModifier = {MoveModifier}, Veterency = {attackerGroupStats.AverageVeterency} vs {defenderGroupStats.AverageVeterency}");
+									goto DecisionTaken;
+								}
+							}
+							// other decisions
+							if (attackerGroupStats.CombatStrength * QJM.VeryHighReducingModifier > defenderGroupStats.CombatStrength)
+							{
+								battleExtension.AttackerPosture = ratioRNG > (FixedPoint)0.5 ? Posture.Pursuit : Posture.AllOutAttack;
+								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}");
+								goto DecisionTaken;
+							}
+							battleExtension.AttackerPosture = Posture.DeliberateAttack;
+							Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}");
+							goto DecisionTaken;
+						}
+						// Other posture
+						else
+						{
+							// very specific decisions
+							FixedPoint veryLogicalDecisionValue = (attackerGroupStats.AverageVeterency * 10) + 10; // [10-40]
+							if (veryLogicalDecisionValue >= postureRNG100)
+							{
+								FixedPoint MoveModifier = QJM.GetMoveModifier(attackerGroupStats.AverageMoves, defenderGroupStats.AverageMoves);
+								if (attackerGroupStats.AverageVeterency > QJM.VeterancyForMobileAttack && attackerGroupStats.AverageVeterency * MoveModifier * QJM.MediumReducingModifier > defenderGroupStats.AverageVeterency) // case where a weaker force can inflict more damage to a stronger attacking oponent
+								{
+									battleExtension.AttackerPosture = Posture.MobileAttack;
+									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, MoveModifier = {MoveModifier}, Veterency = {attackerGroupStats.AverageVeterency} vs {defenderGroupStats.AverageVeterency}");
+									goto DecisionTaken;
+								}
+
+								if (attackerGroupStats.CombatModifier < defenderGroupStats.CombatModifier * QJM.MediumReducingModifier && attackerGroupStats.AverageMoves < defenderGroupStats.AverageMoves) // delaying for more than one turn
+								{
+									battleExtension.AttackerPosture = Posture.Delay;
+									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}, Moves = {attackerGroupStats.AverageMoves} vs {defenderGroupStats.AverageMoves}");
+									goto DecisionTaken;
+								}
+							}
+
+							// very specific decision
+							if (veryLogicalDecisionValue >= postureRNG100)
+							{
+								if (attackerGroupStats.CombatModifier < defenderGroupStats.CombatModifier * QJM.HighReducingModifier && attackerGroupStats.AverageMoves > defenderGroupStats.AverageMoves)
+								{
+									battleExtension.AttackerPosture = Posture.Delay;
+									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}, Moves = {attackerGroupStats.AverageMoves} vs {defenderGroupStats.AverageMoves}");
+									goto DecisionTaken;
+								}
+							}
+
+							// other decisions
+							if (attackerGroupStats.CombatStrength < defenderGroupStats.CombatStrength * QJM.VeryHighReducingModifier)
+							{
+								battleExtension.AttackerPosture = ratioRNG > (FixedPoint)0.5 ? Posture.Delay : Posture.Retreat;
+								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}");
+								goto DecisionTaken;
+							}
+
+
+							if (attackerGroupStats.CombatStrength < defenderGroupStats.CombatStrength * QJM.MediumReducingModifier)
+							{
+								battleExtension.AttackerPosture = ratioRNG > (FixedPoint)0.5 ? Posture.PreparedDefense : Posture.HastyDefense;
+								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI chosed {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {attackerGroupStats.CombatStrength} vs {defenderGroupStats.CombatStrength}");
+								goto DecisionTaken;
+							}
+						}
+					}
+					// unexpected/risky decisions
+					else
+					{
+
+					}
+					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : AttackerEmpire AI kept {battleExtension.AttackerPosture}, logicalDecisionValue = {logicalDecisionValue}");
+
+
+				}
+
+			DecisionTaken:;
+			}
+		}
+		public static void ResolvePostureForDefendingAI(Empire defenderEmpire, Battle battle, ref BattleExtension battleExtension, ListOfStruct<UnitSimplifiedData> attackerUnits, ListOfStruct<UnitSimplifiedData> defenderUnits, UnitGroupStats attackerGroupStats, UnitGroupStats defenderGroupStats)
+		{
+			if (!defenderEmpire.IsControlledByHuman)
+			{
+				bool IsAssault = battle.Siege != null && battle.Siege.SiegeState != SiegeStates.Sortie;
+
+				FixedPoint postureRNG100 = RandomHelper.Next((int)(ulong)battle.GUID + (int)(ulong)defenderEmpire.GUID + SandboxManager.Sandbox.Turn, 0, 100);
+				FixedPoint ratioRNG = postureRNG100 / 100;
+				Diagnostics.LogError($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire with {battleExtension.DefenderPosture} called RandomHelper.Next [0-100]: RNG = {postureRNG100}, ratioRNG = {ratioRNG}");
+				if (HasAnimal(defenderUnits))
+				{
+					battleExtension.DefenderPosture = postureRNG100 > 50 ? Posture.Retreat : Posture.Pursuit;
+					Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderAnimal AI chosed {battleExtension.DefenderPosture}");
+					goto DecisionTaken;
+				}
+				else
+				{
+					// logical decisions
+					FixedPoint logicalDecisionValue = (defenderGroupStats.AverageVeterency * 10) + 50; // [50-80]
+					if (logicalDecisionValue >= postureRNG100)
+					{
+						ratioRNG = (postureRNG100 - logicalDecisionValue) / 100;
+
+						// very specific decision
+						FixedPoint veryLogicalDecisionValue = (defenderGroupStats.AverageVeterency * 10) + 10; // [10-40]
+						if (veryLogicalDecisionValue >= postureRNG100)
+						{
+							FixedPoint MoveModifier = QJM.GetMoveModifier(defenderGroupStats.AverageMoves, attackerGroupStats.AverageMoves);
+							if (defenderGroupStats.AverageVeterency > QJM.VeterancyForMobileAttack && defenderGroupStats.AverageVeterency * MoveModifier > attackerGroupStats.AverageVeterency)
+							{
+								battleExtension.DefenderPosture = Posture.MobileAttack;
+								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (veryLogicalDecisionValue = {veryLogicalDecisionValue}, MoveModifier = {MoveModifier}, Veterency = {defenderGroupStats.AverageVeterency} vs {attackerGroupStats.AverageVeterency}");
+								goto DecisionTaken;
+							}
+						}
+
+						// counter-attack if much stronger
+						if (defenderGroupStats.CombatStrength * QJM.HighReducingModifier > attackerGroupStats.CombatStrength)
+						{
+							// other decisions
+							if (defenderGroupStats.CombatStrength * QJM.VeryHighReducingModifier > attackerGroupStats.CombatStrength)
+							{
+								battleExtension.DefenderPosture = ratioRNG > (FixedPoint)0.5 ? Posture.Pursuit : Posture.AllOutAttack;
+								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}");
+								goto DecisionTaken;
+							}
+							battleExtension.DefenderPosture = Posture.DeliberateAttack;
+							Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (logicalDecisionValue = {logicalDecisionValue}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}");
+							goto DecisionTaken;
+						}
+						// Defensive posture
+						else
+						{
+							bool canWithdraw = !IsAssault || defenderGroupStats.AverageHealth + ratioRNG < FixedPoint.One;
+
+							// very specific decision
+							if (canWithdraw && veryLogicalDecisionValue >= postureRNG100)
+							{
+								FixedPoint attackerMobilityFactor = attackerGroupStats.AverageMoves * QJM.GetVeterancyModifier(attackerGroupStats.AverageVeterency);
+								FixedPoint defenderMobilityFactor = defenderGroupStats.AverageMoves * QJM.GetVeterancyModifier(defenderGroupStats.AverageVeterency);
+
+								if (defenderGroupStats.CombatModifier < attackerGroupStats.CombatModifier * QJM.MediumReducingModifier && defenderMobilityFactor > attackerMobilityFactor * QJM.MediumReducingModifier && defenderGroupStats.AverageHealth > ratioRNG)
+								{
+									battleExtension.DefenderPosture = Posture.Delay;
+									Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (Health = {defenderGroupStats.AverageHealth}, veryLogicalDecisionValue = {veryLogicalDecisionValue}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}, Mobility = {defenderMobilityFactor} vs {attackerMobilityFactor}");
+									goto DecisionTaken;
+								}
+							}
+
+							// other decisions
+							if (canWithdraw && defenderGroupStats.CombatStrength < attackerGroupStats.CombatStrength * QJM.MediumReducingModifier)
+							{
+								battleExtension.DefenderPosture = ratioRNG < (FixedPoint)0.5 ? Posture.Delay : Posture.Retreat; // low ratioRNG here means average health can still be relatively high in case of assault
+								Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}");
+								goto DecisionTaken;
+							}
+
+							battleExtension.DefenderPosture = ratioRNG > (FixedPoint)0.5 ? Posture.PreparedDefense : Posture.HastyDefense;
+							Diagnostics.Log($"[Gedemon][BattleAutoResolver] ComputeAutoResolve : defenderEmpire AI chosed {battleExtension.DefenderPosture} (logicalDecisionValue = {logicalDecisionValue}, ratioRNG = {ratioRNG}, CombatStrength = {defenderGroupStats.CombatStrength} vs {attackerGroupStats.CombatStrength}");
+							goto DecisionTaken;
+						}
+					}
+					// unexpected/risky decisions
+					else
+					{
+
+					}
+				}
+
+			DecisionTaken:;
+			}
+		}
+		public static void ApplyTerrainDataBonus(ListOfStruct<UnitSimplifiedData> attackerUnitsData, ref BattleAutoResolver.AutoResolveTerrainData attackerTerrainData, ListOfStruct<UnitSimplifiedData> defenderUnitsData, ref BattleAutoResolver.AutoResolveTerrainData defenderTerrainData)
+		{
+			FixedPoint zero = FixedPoint.Zero;
+			FixedPoint zero2 = FixedPoint.Zero;
+			if (attackerTerrainData.Elevation != defenderTerrainData.Elevation)
+			{
+				if (attackerTerrainData.Elevation > defenderTerrainData.Elevation)
+				{
+					zero += BattleAutoResolver.ElevationBonus;
+				}
+				else if (attackerTerrainData.Elevation < defenderTerrainData.Elevation)
+				{
+					zero2 += BattleAutoResolver.ElevationBonus;
+				}
+			}
+
+			if (attackerTerrainData.Rivers != defenderTerrainData.Rivers)
+			{
+				if (attackerTerrainData.Rivers > defenderTerrainData.Rivers)
+				{
+					zero2 += BattleAutoResolver.RiversBonus;
+				}
+				else if (attackerTerrainData.Rivers < defenderTerrainData.Rivers)
+				{
+					zero += BattleAutoResolver.RiversBonus;
+				}
+			}
+
+			if (attackerTerrainData.Covers != defenderTerrainData.Covers)
+			{
+				if (attackerTerrainData.Covers > defenderTerrainData.Covers)
+				{
+					zero += BattleAutoResolver.CoverBonus;
+				}
+				else if (attackerTerrainData.Covers < defenderTerrainData.Covers)
+				{
+					zero2 += BattleAutoResolver.CoverBonus;
+				}
+			}
+
+			if (attackerTerrainData.Fortifications != defenderTerrainData.Fortifications)
+			{
+				if (attackerTerrainData.Fortifications > defenderTerrainData.Fortifications)
+				{
+					zero += BattleAutoResolver.FortificationBonus;
+				}
+				else if (attackerTerrainData.Fortifications < defenderTerrainData.Fortifications)
+				{
+					zero2 += BattleAutoResolver.FortificationBonus;
+				}
+			}
+
+			_ = MercuryPreferences.VerboseInstantResolveLogs;
+			int length = attackerUnitsData.Length;
+			for (int i = 0; i < length; i++)
+			{
+				attackerUnitsData.Data[i].CombatStrength += zero;
+			}
+
+			length = defenderUnitsData.Length;
+			for (int j = 0; j < length; j++)
+			{
+				defenderUnitsData.Data[j].CombatStrength += zero2;
+			}
+		}
+
+		public static void LogListBattleGroupArmies(BattleGroup battleGroup)
+		{
+			List<BattleContender> contenders = new List<BattleContender>(battleGroup.Contenders);
+			Diagnostics.LogWarning($"[Gedemon][Battle] LogListbattleGroupArmies: battleGroup.Role = {battleGroup.Role}, battleGroup contenders.Count = {contenders.Count}");
+			for (int contenderIndex = 0; contenderIndex < contenders.Count; contenderIndex++)
+			{
+				List<Participant> participants = new List<Participant>(contenders[contenderIndex].Participants);
+				int count = participants.Count;
+				for (int i = 0; i < count; i++)
+				{
+					Participant participant = participants[i];
+					Participant_Army participant_Army = participant as Participant_Army;
+					if (participant_Army != null)
+					{
+						Army army = participant_Army.Army;
+						Diagnostics.Log($"[Gedemon][Battle] LogListbattleGroupArmies: contender [{contenderIndex}] participant army [{i}] GUID = {army.GUID}");
+					}
+				}
+			}
 		}
 	}
 	//*/

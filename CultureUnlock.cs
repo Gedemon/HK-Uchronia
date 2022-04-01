@@ -1337,7 +1337,7 @@ namespace Gedemon.Uchronia
 
 			return true;
         }
-		public static void InitializeTCL(World currentWorld)
+		public static void OnMapLoaded(World currentWorld)
 		{
 
 			Diagnostics.LogWarning($"[Gedemon] [CultureUnlock] Initializing TCL");

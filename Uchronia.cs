@@ -31,9 +31,73 @@ namespace Gedemon.Uchronia
 		public const string pluginGuid = "gedemon.humankind.uchronia";
 		public const string pluginVersion = "1.0.0.0";
 
-		public static bool LoggingStartData = true;
+		public static bool LoggingStartData = false;
 
 		static public bool SandboxInitialized = false;
+
+		public bool toggleShowTerritory = false;
+
+		public static BepInEx.Logging.ManualLogSource MyLog;
+
+		// Awake is called once when both the game and the plug-in are loaded
+		void Awake()
+		{
+			MyLog = BepInEx.Logging.Logger.CreateLogSource("Uchronia");
+			Harmony harmony = new Harmony(pluginGuid);
+			Instance = this;
+			harmony.PatchAll();
+		}
+		public static Uchronia Instance;
+		
+
+		void Start()
+		{
+			Logger.LogInfo($"[Gedemon][Uchronia][Started]");
+
+			InvokeRepeating("Repeat", 2.0f, 0.5f);
+		}
+
+		private void Update()
+		{
+			if (Input.GetKeyDown((KeyCode)284)) // press F3 to toggle
+			{
+				toggleShowTerritory = !toggleShowTerritory;
+				int localEmpireIndex = SandboxManager.Sandbox.LocalEmpireIndex;
+				UIManager UIManager = Services.GetService<IUIService>() as UIManager;
+
+				// reset to default cursor
+				Amplitude.Mercury.Presentation.Presentation.PresentationCursorController.ChangeToDefaultCursor(resetUnitDefinition: false);
+
+				if (toggleShowTerritory)
+				{
+					// hide UI
+					UIManager.IsUiVisible = false;
+
+					// switch to DiplomaticCursor, where territories can be highlighted
+					Amplitude.Mercury.Presentation.Presentation.PresentationCursorController.ChangeToDiplomaticCursor(localEmpireIndex);
+				}
+				else
+				{
+					// restore UI
+					UIManager.IsUiVisible = true;
+				}
+
+				Amplitude.Mercury.Presentation.PresentationTerritoryHighlightController HighlightControllerControler = Amplitude.Mercury.Presentation.Presentation.PresentationTerritoryHighlightController;
+				HighlightControllerControler.ClearAllTerritoryVisibility();
+				int num = HighlightControllerControler.territoryHighlightingInfos.Length;
+				for (int i = 0; i < num; i++)
+				{
+					HighlightControllerControler.SetTerritoryVisibility(i, toggleShowTerritory);
+				}
+			}
+		}
+
+		void Repeat()
+		{
+			UI.UpdateObjects();
+		}
+
+
 
 		#region Define Options
 
@@ -397,8 +461,8 @@ namespace Gedemon.Uchronia
 			Key = "GameOption_TCL_StartingOutpost",
 			GroupKey = "GameOptionGroup_LobbyDifficultyOptions",
 			DefaultValue = "Off",
-			Title = "Start with an Outpost",
-			Description = "Toggle if Empires will start with an Outpost. This setting can be used on any map.",
+			Title = "Start with an Outpost <c=FF0000>(disabled in MP)</c>",
+			Description = "Toggle if Empires will start with an Outpost. This setting can be used on any map. Currently disabled in MP as it cause desyncs.",
 			States =
 			{
 				new GameOptionStateInfo
@@ -683,7 +747,7 @@ namespace Gedemon.Uchronia
 		public static bool CanUseCityMap()
 		{
 			return Instance.UseCityMap;
-		}		
+		}
 		public static bool KeepOnlyCultureTerritory()
 		{
 			return Instance.OnlyCultureTerritory;
@@ -801,20 +865,13 @@ namespace Gedemon.Uchronia
 		}
 
 		#endregion
-
-		public bool toggleShowTerritory = false;
-
-		// Awake is called once when both the game and the plug-in are loaded
-		void Awake()
-		{
-			Harmony harmony = new Harmony(pluginGuid);
-			Instance = this;
-			harmony.PatchAll();
-		}
-		public static Uchronia Instance;
-
+		
 		public static void CreateStartingOutpost()
 		{
+			ISessionService sessionService = Services.GetService<ISessionService>();
+			bool isMultiplayer = sessionService != null && sessionService.Session != null && sessionService.Session.SessionMode == SessionMode.Online;
+			if (isMultiplayer)
+				return;
 
 			int numMajor = Amplitude.Mercury.Sandbox.Sandbox.MajorEmpires.Length;
 			for (int empireIndex = 0; empireIndex < numMajor; empireIndex++)
@@ -833,140 +890,14 @@ namespace Gedemon.Uchronia
 			}
 		}
 
-		private void Update()
+		public static void Log(string text)
 		{
-			if (Input.GetKeyDown((KeyCode)284)) // press F3 to toggle
-			{
-				toggleShowTerritory = !toggleShowTerritory;
-				int localEmpireIndex = SandboxManager.Sandbox.LocalEmpireIndex;
-				UIManager UIManager = Services.GetService<IUIService>() as UIManager;
-
-				// reset to default cursor
-				Amplitude.Mercury.Presentation.Presentation.PresentationCursorController.ChangeToDefaultCursor(resetUnitDefinition: false);
-
-				if (toggleShowTerritory)
-				{
-					// hide UI
-					UIManager.IsUiVisible = false;
-
-					// switch to DiplomaticCursor, where territories can be highlighted
-					Amplitude.Mercury.Presentation.Presentation.PresentationCursorController.ChangeToDiplomaticCursor(localEmpireIndex);
-				}
-				else
-				{
-					// restore UI
-					UIManager.IsUiVisible = true;
-				}
-
-				Amplitude.Mercury.Presentation.PresentationTerritoryHighlightController HighlightControllerControler = Amplitude.Mercury.Presentation.Presentation.PresentationTerritoryHighlightController;
-				HighlightControllerControler.ClearAllTerritoryVisibility();
-				int num = HighlightControllerControler.territoryHighlightingInfos.Length;
-				for (int i = 0; i < num; i++)
-				{
-					HighlightControllerControler.SetTerritoryVisibility(i, toggleShowTerritory);
-				}
-			}
+			MyLog.LogInfo(text);
 		}
 	}
 
     #region Patches
 
-	[HarmonyPatch(typeof(DepartmentOfIndustry))]
-	public class DepartmentOfIndustry_Patch
-	{
-		[HarmonyPatch("InvestProductionFor")]
-		[HarmonyPrefix]
-		public static bool InvestProductionFor(DepartmentOfIndustry __instance, ConstructionQueue constructionQueue)
-		{
-
-			if (CultureUnlock.UseTrueCultureLocation())
-			{
-
-				FixedPoint left = DepartmentOfIndustry.ComputeProductionIncome(constructionQueue.Settlement);
-				Settlement entity = constructionQueue.Settlement.Entity;
-				FixedPoint fixedPoint = left + constructionQueue.CurrentResourceStock;
-				constructionQueue.CurrentResourceStock = 0;
-				bool flag = false;
-				if (constructionQueue.Constructions.Count > 0)
-				{
-					flag = (constructionQueue.Constructions[0].ConstructibleDefinition.ProductionCostDefinition.Type == ProductionCostType.TurnBased);
-				}
-
-				bool flag2 = true;
-				int num = 0;
-				while ((fixedPoint > 0 || (flag2 && flag)) && num < constructionQueue.Constructions.Count)
-				{
-					int num2 = num++;
-					Construction construction = constructionQueue.Constructions[num2];
-					construction.Cost = __instance.GetConstructibleProductionCostForSettlement(entity, construction.ConstructibleDefinition);
-					construction.Cost = __instance.ApplyPositionCostModifierIfNecessary(construction.Cost, construction.ConstructibleDefinition, construction.WorldPosition.ToTileIndex());
-					constructionQueue.Constructions[num2] = construction;
-					bool num3 = construction.FailureFlags != ConstructionFailureFlags.None;
-					bool hasBeenBoughtOut = construction.HasBeenBoughtOut;
-					bool flag3 = construction.InvestedResource >= construction.Cost;
-					if (num3 | hasBeenBoughtOut | flag3)
-					{
-						continue;
-					}
-
-					switch (construction.ConstructibleDefinition.ProductionCostDefinition.Type)
-					{
-						case ProductionCostType.TurnBased:
-							if (!flag2)
-							{
-								continue;
-							}
-
-							fixedPoint = 0;
-							++construction.InvestedResource;
-							break;
-						case ProductionCostType.Infinite:
-							fixedPoint = 0;
-							break;
-						case ProductionCostType.Production:
-							{
-								FixedPoint fixedPoint2 = construction.Cost - construction.InvestedResource;
-								if (fixedPoint > fixedPoint2)
-								{
-									fixedPoint -= fixedPoint2;
-									construction.InvestedResource = construction.Cost;
-									__instance.NotifyEndedConstruction(constructionQueue, num2, ref construction);
-									Amplitude.Framework.Simulation.SimulationController.RefreshAll();
-								}
-								else
-								{
-									construction.InvestedResource += fixedPoint;
-									fixedPoint = 0;
-								}
-
-								break;
-							}
-						case ProductionCostType.Transfert:
-							{
-								FixedPoint productionIncome = fixedPoint * entity.EmpireWideConstructionProductionBoost.Value;
-								fixedPoint = __instance.TransfertProduction(construction, productionIncome);
-								break;
-							}
-						default:
-							Diagnostics.LogError("Invalid production cost type.");
-							break;
-					}
-
-					flag2 = false;
-					constructionQueue.Constructions[num2] = construction;
-				}
-
-				__instance.CleanConstructionQueue(constructionQueue);
-				if (entity.SettlementStatus == SettlementStatuses.City)
-				{
-					constructionQueue.CurrentResourceStock = FixedPoint.Max(left, fixedPoint); // was FixedPoint.Min
-				}
-
-				return false; // we've replaced the full method
-			}
-			return true;
-		}
-	}
 
 	[HarmonyPatch(typeof(Timeline))]
 	public class Timeline_Patch
@@ -1041,65 +972,6 @@ namespace Gedemon.Uchronia
 		}
 	}
 
-	[HarmonyPatch(typeof(DiplomaticBanner))]
-	public class DiplomaticBanner_Patch
-	{
-		[HarmonyPatch("RefreshItemsPerLine")]
-		[HarmonyPrefix]
-		public static bool RefreshItemsPerLine(DiplomaticBanner __instance)
-		{
-			__instance.maxNumberOfItemsPerLine = Uchronia.GetEmpireIconsNumColumn(); // default = 4 (75% for 9 items)
-			return true;
-		}
-	}
-
-	[HarmonyPatch(typeof(Amplitude.Mercury.UI.Helpers.GameUtils))]
-	public class GameUtils_Patch
-	{
-		[HarmonyPatch("GetTerritoryName")]
-		[HarmonyPrefix]
-		public static bool GetTerritoryName(Amplitude.Mercury.UI.Helpers.GameUtils __instance, ref string __result, int territoryIndex, EmpireColor useColor = EmpireColor.None)
-		{
-
-			if (CultureUnlock.UseTrueCultureLocation())
-			{
-				//Diagnostics.Log($"[Gedemon] in GameUtils, GetTerritoryName");
-				ref TerritoryInfo reference = ref Snapshots.GameSnapshot.PresentationData.TerritoryInfo.Data[territoryIndex];
-				bool flag = useColor != EmpireColor.None;
-				if (reference.AdministrativeDistrictGUID != 0)
-				{
-					ref SettlementInfo reference2 = ref Snapshots.GameSnapshot.PresentationData.SettlementInfo.Data[reference.SettlementIndex];
-					if (reference2.TileIndex == reference.AdministrativeDistrictTileIndex)
-					{
-						string text = CultureUnlock.TerritoryHasName(territoryIndex) ? CultureUnlock.GetTerritoryName(territoryIndex, hasName: true) : reference2.EntityName.ToString();// reference2.EntityName.ToString();
-						if (flag)
-						{
-							//Color empireColor = __instance.GetEmpireColor(reference.EmpireIndex, useColor);
-							//__result = Amplitude.Mercury.Utils.TextUtils.ColorizeText(text, empireColor);
-							//return false;
-						}
-
-						__result = text;
-						return false;
-					}
-				}
-
-				string text2 = CultureUnlock.TerritoryHasName(territoryIndex) ? CultureUnlock.GetTerritoryName(territoryIndex, hasName: true) : reference.LocalizedName ?? string.Empty;// reference.LocalizedName ?? string.Empty;
-				if (flag && reference.Claimed)
-				{
-					//Color empireColor2 = __instance.GetEmpireColor(reference.EmpireIndex, useColor);
-					//__result = __instance.TextUtils.ColorizeText(text2, empireColor2);
-					//return false;
-				}
-
-				__result = text2;
-				return false;
-
-			}
-			return true;
-
-		}
-	}
 
 	[HarmonyPatch(typeof(AvatarManager))]
 	public class AvatarManager_Patch
@@ -1140,62 +1012,6 @@ namespace Gedemon.Uchronia
 		}	
 	}
 
-	[HarmonyPatch(typeof(PresentationDistrict))]
-	public class PresentationDistrict_Patch
-	{
-
-		[HarmonyPrefix]
-		[HarmonyPatch(nameof(UpdateFromDistrictInfo))]
-		public static bool UpdateFromDistrictInfo(PresentationDistrict __instance, ref DistrictInfo districtInfo, bool isStartOrEmpireChange, bool isNewDistrict)
-		{
-
-			if (!Uchronia.KeepHistoricalDistricts())
-				return true;
-
-			if (districtInfo.DistrictType == DistrictTypes.Exploitation)
-            {
-				return true;
-            }
-			if (isNewDistrict || districtInfo.DistrictDefinitionName == DepartmentOfTheInterior.CityCenterDistrictDefinitionName)
-			{
-				if(CurrentGame.Data.HistoricVisualAffinity.TryGetValue(districtInfo.TileIndex, out DistrictVisual cachedVisualAffinity))
-				{
-					//Diagnostics.LogError($"[Gedemon] UpdateFromDistrictInfo {districtInfo.DistrictDefinitionName}, isNewDistrict = {isNewDistrict}), TileIndex = {districtInfo.TileIndex}, VisualAffinityName = {districtInfo.VisualAffinityName}, InitialVisualAffinityName = {districtInfo.InitialVisualAffinityName}, cached = ({cachedVisualAffinity.VisualAffinity}) ");
-
-				}
-				if (isNewDistrict)
-				{
-					if (CurrentGame.Data.HistoricVisualAffinity.ContainsKey(districtInfo.TileIndex))
-                    {
-						//CurrentGame.Data.HistoricVisualAffinity.Remove(districtInfo.TileIndex); // need to clean somewhere else, "isNewDistrict" is true on capture)
-					}
-					ref TileInfo reference = ref Amplitude.Mercury.Sandbox.Sandbox.World.TileInfo.Data[districtInfo.TileIndex];
-					Diagnostics.LogWarning($"[Gedemon] UpdateFromDistrictInfo (new district)  {districtInfo.DistrictDefinitionName}, TileIndex = {districtInfo.TileIndex} ({CultureUnlock.GetTerritoryName(reference.TerritoryIndex)}), VisualAffinityName = {districtInfo.VisualAffinityName}, InitialVisualAffinityName = {districtInfo.InitialVisualAffinityName}");
-				}
-				return true;
-			}
-            //Diagnostics.LogError($"[Gedemon] UpdateFromDistrictInfo districtInfo = {districtInfo.VisualAffinityName}, isStartOrEmpireChange = {isStartOrEmpireChange}, isNewDistrict = {isNewDistrict})");
-            else
-            {
-
-				if (CurrentGame.Data.HistoricVisualAffinity.TryGetValue(districtInfo.TileIndex, out DistrictVisual historicDistrict) && districtInfo.VisualAffinityName != historicDistrict.VisualAffinity)
-				{
-
-					ref TileInfo reference = ref Amplitude.Mercury.Sandbox.Sandbox.World.TileInfo.Data[districtInfo.TileIndex];
-                    //if(CultureUnlock.GetTerritoryName(reference.TerritoryIndex) == "Graecia")
-					{
-						//Diagnostics.LogWarning($"[Gedemon] UpdateFromDistrictInfo for {districtInfo.DistrictDefinitionName} at TileIndex #{districtInfo.TileIndex} ({CultureUnlock.GetTerritoryName(reference.TerritoryIndex)}) with different cached visual ({historicDistrict.VisualAffinity}, EraIndex = {historicDistrict.EraIndex}) and info visual ({districtInfo.VisualAffinityName}) (initial = {districtInfo.InitialVisualAffinityName})");
-					}
-					districtInfo.VisualAffinityName = historicDistrict.VisualAffinity;
-					districtInfo.InitialVisualAffinityName = historicDistrict.VisualAffinity;
-					districtInfo.EraIndex = historicDistrict.EraIndex;
-
-				}
-			}
-
-			return true;
-		}
-	}
 
 	[HarmonyPatch(typeof(PresentationTerritoryHighlightController))]
 	public class PresentationTerritoryHighlightController_Patch
@@ -1366,6 +1182,84 @@ namespace Gedemon.Uchronia
 			if (sessionSlot.Index >= 10)
 			{
 				return false;
+			}
+			return true;
+		}
+	}
+
+	// bugfix
+	[HarmonyPatch(typeof(Amplitude.Mercury.Interop.AI.AIEntity))]
+	public class AIEntity_patch
+	{
+		static SimulationEntityGUID lastGUID = 0;
+
+		[HarmonyPrefix]
+		[HarmonyPatch(nameof(Synchronize))]
+		public static bool Synchronize(Amplitude.Mercury.Interop.AI.AIEntity __instance, ISimulationEntity simulationEntity)
+		{
+			if(__instance is Amplitude.Mercury.Interop.AI.Entities.Army)
+			{
+				Army army = simulationEntity as Army;
+                if(army != null)
+				{
+					//Uchronia.Log($"AIEntitySynchronizer, Synchronize Army, simulationEntity Army GUID = { army.GUID }");
+
+					if(lastGUID == army.GUID)
+					{
+						Diagnostics.LogError($"[Gedemon] Before AIEntitySynchronizer, Synchronize Army, simulationEntity Army GUID = { army.GUID } was already the last called, checking for error...");
+
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .SpawnType = {army.Units[0].UnitDefinition.SpawnType}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .PathfindContext = {PathfindContext.GetArmyPathfindContextForWorld(army)}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .TileIndex = {army.WorldPosition.ToTileIndex()}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .TerritoryIndex = {Amplitude.Mercury.Sandbox.Sandbox.World.TileInfo.Data[army.WorldPosition.ToTileIndex()].TerritoryIndex}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .State =  {army.State}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .IsLocked = {army.IsLocked}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .IsNomadic = {army.IsNomadic}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .IsMercenary = {army.MercenaryIndex >= 0}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .IsTrespassing = {DepartmentOfDefense.IsArmyTrespassing(army, army.WorldPosition.ToTileIndex()) == DepartmentOfDefense.TrespassingState.Trespassing}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .IsRetreating = {army.HasUnitStatus(DepartmentOfDefense.RetreatedUnitStatusName)}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .Flags = {army.Flags}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .HealthRatio = {army.HealthRatio}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .AutoExplore = {army.AutoExplore}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .ArmyMissionIndex ={army.ArmyMissionIndex}");
+
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .Empire.Entity.Index ={army.Empire.Entity.Index}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: canMoveOnWater ={(army.MovementAbility & Amplitude.Mercury.Data.World.PathfindingMovementAbility.Water) != 0}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .Units.Count ={army.Units.Count}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: ArmyGoToAction ={Amplitude.Mercury.Sandbox.Sandbox.ActionController.GetActionFor<ArmyGoToAction, Amplitude.Mercury.Simulation.Army>(army)}");
+						Diagnostics.Log($"[Gedemon][Synchronize] Check to Synchronize: .LockedByBattles.Count ={army.LockedByBattles.Count}");
+
+						int num2 = army.LockedByBattles.Count;
+						List<ulong> RemoveLockedByBattles = new List<ulong>();
+						for (int k = 0; k < num2; k++)
+						{
+							ulong battleGUID = army.LockedByBattles[k];
+							Diagnostics.Log($"[Gedemon][Synchronize] LogListbattleGroupArmies: locked by battle guid ={battleGUID}");
+							Amplitude.Mercury.Sandbox.Sandbox.BattleRepository.TryGetBattle(battleGUID, out var battle);
+							Diagnostics.Log($"[Gedemon][Synchronize] LogListbattleGroupArmies: battle exists ={battle != null}");
+							if(battle != null)
+                            {
+								if (battle.TryGetParticipant(army.GUID, out var participant))
+								{
+									Diagnostics.Log($"[Gedemon][Synchronize] LogListbattleGroupArmies: participant.Role ={participant.Role}");
+									break;
+								}
+							}
+                            else
+							{
+								Diagnostics.LogError($"[Gedemon][Synchronize] Removing Army #{ army.GUID } reference to non-existing locking battle...");
+								RemoveLockedByBattles.Add(battleGUID);
+							}
+						}
+
+						for (int k = 0; k < RemoveLockedByBattles.Count; k++)
+						{
+							army.LockedByBattles.Remove(RemoveLockedByBattles[k]);
+						}
+					}
+					lastGUID = army.GUID;
+				}
+
 			}
 			return true;
 		}

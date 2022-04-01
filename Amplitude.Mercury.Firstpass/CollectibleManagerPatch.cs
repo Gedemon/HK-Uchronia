@@ -14,54 +14,35 @@ namespace Gedemon.Uchronia
 		[HarmonyPatch(nameof(InitializeOnLoad))]
 		public static void InitializeOnLoad(CollectibleManager __instance)
 		{
-			if (!Uchronia.LoggingStartData)
-				return;
-
 			Diagnostics.LogWarning($"[Gedemon] in CollectibleManager, InitializeOnLoad");
-			MapUtils.LogTerritoryStats();
-			CultureUnlock.logEmpiresTerritories();
-			MapUtils.LogTerritoryData();
 
-			// stability level	= PublicOrderEffectDefinition, EmpireStabilityDefinition
-			// units			= PresentationUnitDefinition
-			// cultures			= FactionDefinition
-			// eras				= EraDefinition
-			// 
-			// BuildingVisualAffinityDefinition
-			// UnitVisualAffinityDefinition
-			// EmpireSymbolDefinition
-			// Amplitude.Framework.Localization.LocalizedStringElement
-			// GameSpeedDefinition
-			// EraDefinition
-			/* 
-			var database1 = Databases.GetDatabase<Amplitude.Mercury.Data.Simulation.EndGameDefinition>();
-			foreach (Amplitude.Mercury.Data.Simulation.EndGameDefinition data in database1)
+			if (Uchronia.LoggingStartData)
 			{
-				Diagnostics.LogWarning($"[Gedemon] EraDefinition name = {data.name}");//, Name = {data.Name}");
+				MapUtils.LogTerritoryStats();
+				CultureUnlock.logEmpiresTerritories();
+				MapUtils.LogTerritoryData();
 
-				foreach (var prop in data.GetType().GetProperties())
+				// Log all factions
+				//*
+				var factionDefinitions = Databases.GetDatabase<Amplitude.Mercury.Data.Simulation.FactionDefinition>();
+				foreach (Amplitude.Mercury.Data.Simulation.FactionDefinition data in factionDefinitions)
 				{
-					Diagnostics.Log($"[Gedemon] {prop.Name} = {prop.GetValue(data, null)}");
+					Diagnostics.LogWarning($"[Gedemon] FactionDefinition name = {data.name}, era = {data.EraIndex}");//, Name = {data.Name}");
 				}
+				//*/
 			}
-			//*/
 
 			/*
 			var definition = Databases.GetDatabase<Amplitude.Framework.Localization.LocalizedStringElement>();
 			foreach (Amplitude.Framework.Localization.LocalizedStringElement data in definition)
 			{
-				Diagnostics.LogWarning($"[Gedemon] Localization {data.name} = {data.CompactedNodes[0].TextValue}");
+				for (int i = 0; i < data.CompactedNodes.Length; i++ )
+                {
+					Diagnostics.LogWarning($"[Gedemon] Localization {data.name} CompactedNodes[{i}] = {data.CompactedNodes[i].TextValue}");
+				}
 			}
 			//*/
 
-			// Log all factions
-			//*
-			var factionDefinitions = Databases.GetDatabase<Amplitude.Mercury.Data.Simulation.FactionDefinition>();
-			foreach (Amplitude.Mercury.Data.Simulation.FactionDefinition data in factionDefinitions)
-			{
-				Diagnostics.LogWarning($"[Gedemon] FactionDefinition name = {data.name}, era = {data.EraIndex}");//, Name = {data.Name}");
-			}
-			//*/
 
 			// Log all options
 			var gameOptionDefinitions = Databases.GetDatabase<GameOptionDefinition>();

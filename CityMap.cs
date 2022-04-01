@@ -69,6 +69,15 @@ namespace Gedemon.Uchronia
 
         }
 
+        static public void UpdateSettlementName(Settlement settlement)
+        {
+            if (CityMap.TryGetCityNameAt(settlement.WorldPosition, settlement.Empire, out string cityLocalizationKey))
+            {
+                settlement.EntityName.cachedLocalizedName = Utils.TextUtils.Localize(cityLocalizationKey);
+                settlement.EntityName.LocalizationKey = cityLocalizationKey;
+            }
+        }
+
         static bool TryGetAliasCity(string civilization, string localizationKey, out string aliasCityKey, out int entryNum)
         {
             aliasCityKey = null;
@@ -126,7 +135,28 @@ namespace Gedemon.Uchronia
             return eraCityKey != null;
         }
 
-        public static bool TryGetCityNameAt(WorldPosition position, Empire empire, out string cityLocalizationKey)
+        static bool TryGetEraCity(int empireEra, string localizationKey, out string eraCityKey, out int eraDiff)
+        {
+            int minEraIndex = System.Math.Min(Sandbox.Timeline.GetGlobalEraIndex(), empireEra);
+            eraDiff = 0;
+            eraCityKey = null;
+            for (int eraIndex = minEraIndex; eraIndex < Sandbox.Timeline.eraDefinitions.Length; eraIndex++)
+            {
+                string eraTag = "Era" + eraIndex.ToString();
+                string testCityKey = localizationKey + "_" + eraTag;
+                eraDiff = System.Math.Abs(empireEra - eraIndex);
+                //Diagnostics.Log($"[Gedemon] [CityMap] Check localization for a city name specific to era {testCityKey}");
+                if (HasLocalization(testCityKey))
+                {
+                    eraCityKey = testCityKey;
+                    return true;
+                }
+            }
+
+            return eraCityKey != null;
+        }
+
+        public static bool TryGetCityNameAt(WorldPosition position, FactionDefinition factionDefinition, int eraIndex, out string cityLocalizationKey)
         {
             cityLocalizationKey = null;
 
@@ -134,7 +164,76 @@ namespace Gedemon.Uchronia
                 return false;
 
             Diagnostics.LogWarning($"[Gedemon] [CityMap] Try get City Name for position {position}");
+            int tileIndex = position.ToTileIndex();
+            int territoryIndex = Amplitude.Mercury.Sandbox.Sandbox.World.TileInfo.Data[tileIndex].TerritoryIndex;
+            if (TerritoryCityMap.TryGetValue(territoryIndex, out List<CityPosition> cityList))
+            {
+                int bestDistance = int.MaxValue;
+                int bestmatch = (int)MatchLevel.Generic;
+                string civilizationTag = factionDefinition.name.Split('_').Last();
+                foreach (CityPosition cityPosition in cityList)
+                {
+                    int currentMatch = (int)MatchLevel.Generic;
+                    int column = cityPosition.Column;
+                    int row = cityPosition.Row;
+                    WorldPosition namePosition = new WorldPosition(column, row);
+                    string currentLocalizationKey = $"%{cityPosition.Name}";
+                    string cultureCityKey = currentLocalizationKey + "_" + civilizationTag;
+                    int distance = namePosition.GetDistance(tileIndex);
+
+                    //Diagnostics.Log($"[Gedemon] [CityMap] Check position of {currentLocalizationKey} at distance = {distance}");
+
+                    // Check if there is a localization for a city name specific to that culture
+                    //Diagnostics.Log($"[Gedemon] [CityMap] Check localization for a city name specific to culture {cultureCityKey}");
+                    if (HasLocalization(cultureCityKey))
+                    {
+                        currentMatch = (int)MatchLevel.Culture;
+                        currentLocalizationKey = cultureCityKey;
+                    }
+                    // Else check if there is a localization for a city name specific to an aliase culture
+                    else if (TryGetAliasCity(factionDefinition.name, currentLocalizationKey, out string aliasCityKey, out int entryNum))
+                    {
+                        currentMatch = (int)MatchLevel.CultureList - entryNum;
+                        currentLocalizationKey = aliasCityKey;
+                    }
+                    // Else check if there is a localization for a city name matching the current global era or the Empire Era
+                    else if (TryGetEraCity(eraIndex, currentLocalizationKey, out string eraCityKey, out int eraDiff))
+                    {
+                        currentMatch = (int)MatchLevel.Era - eraDiff;
+                        currentLocalizationKey = eraCityKey;
+                    }
+
+                    if ((distance < bestDistance && currentMatch == bestmatch) || currentMatch > bestmatch)
+                    {
+                        //Diagnostics.Log($"[Gedemon] [CityMap] Set new best match for {currentLocalizationKey} at distance = {distance}, match level = {currentMatch}");
+                        cityLocalizationKey = currentLocalizationKey;
+                        bestDistance = distance;
+                        bestmatch = currentMatch;
+                    }
+                }
+                if (cityLocalizationKey != null)
+                {
+                    Diagnostics.Log($"[Gedemon] [CityMap] Returning best match ({cityLocalizationKey}) at distance = {bestDistance}, match level = {bestmatch}");
+                    return true;
+                }
+
+            }
+
+            return false;
+        }
+
+        public static bool TryGetCityNameAt(WorldPosition position, Empire empire, out string cityLocalizationKey)
+        {
+            cityLocalizationKey = null;
+
+            if (!Uchronia.CanUseCityMap())
+                return false;
+
+            //Diagnostics.LogWarning($"[Gedemon] [CityMap] Try get City Name for position {position}");
             FactionDefinition factionDefinition = empire.FactionDefinition;
+            int empireEra = (int)empire.EraLevel.Value;
+            return TryGetCityNameAt(position, factionDefinition, empireEra, out cityLocalizationKey);
+            /*
             int tileIndex = position.ToTileIndex();
             int territoryIndex = Amplitude.Mercury.Sandbox.Sandbox.World.TileInfo.Data[tileIndex].TerritoryIndex;
             if (TerritoryCityMap.TryGetValue(territoryIndex, out List<CityPosition> cityList))
@@ -191,6 +290,7 @@ namespace Gedemon.Uchronia
             }
 
             return false;
+            //*/
         }
 
         public static void OnExitSandbox()

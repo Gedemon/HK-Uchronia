@@ -201,7 +201,8 @@ namespace Gedemon.Uchronia
 		[HarmonyPatch(nameof(LocalizeTerritory))]
 		public static bool LocalizeTerritory(World __instance)
 		{
-			CultureUnlock.InitializeTCL(__instance);
+			CultureUnlock.OnMapLoaded(__instance);
+			DatabaseUtils.OnMapLoaded();
 
 			int length = __instance.TerritoryInfo.Length;
 			Amplitude.Framework.Localization.ILocalizationService service = Amplitude.Framework.Services.GetService<Amplitude.Framework.Localization.ILocalizationService>();

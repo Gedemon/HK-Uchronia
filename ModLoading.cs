@@ -8,59 +8,11 @@ using Amplitude.Mercury.Terrain;
 using static Amplitude.Mercury.Runtime.RuntimeManager;
 using Amplitude.Framework.Asset;
 using UnityEngine;
+using Amplitude.Framework;
+using Amplitude.Mercury.Runtime;
 
 namespace Gedemon.Uchronia
 {
-    public class TestClass
-    {
-        public List<int> MapTerritoryHash = new List<int> { -819807177, -288044546 };
-        public IDictionary<string, List<int>> MinorFactionTerritories = new Dictionary<string, List<int>>
-					{
-                        { "IndependentPeople_Era1_Peaceful_Akkadians",      new List<int>() { 142, 123 } },
-						{ "IndependentPeople_Era1_Peaceful_Elamites",       new List<int>() { 243 } },
-						{ "IndependentPeople_Era1_Peaceful_Noks",           new List<int>() { 220 } },
-					};
-        public IDictionary<int, Hexagon.OffsetCoords> ExtraPositions = new Dictionary<int, Hexagon.OffsetCoords>
-				{
-                    { 0, new Hexagon.OffsetCoords(32, 41)},
-					{ 1, new Hexagon.OffsetCoords(40, 51)},
-					{ 2, new Hexagon.OffsetCoords(56, 55)}, 
-				};
-        public IDictionary<int, string> ContinentNames = new Dictionary<int, string>
-                {
-                    { 0, "Oceans"},
-                    { 1, "Americas"},
-                    { 2, "Eurasiafrica"},
-                };
-        public List<string> NoCapital = new List<string> { "Civilization_Era1_Assyria", "Civilization_Era1_HarappanCivilization"};
-
-    }
-    public class CityPosition
-    {
-        public int TerritoryIndex { get; set; }
-        public string Name { get; set; }
-        public int Row { get; set; }
-        public int Column { get; set; }
-        public int Size { get; set; }
-        public Hexagon.OffsetCoords Position { get; set; }
-    }
-    public class MapTCL
-    {
-        public int LoadOrder { get; set; }
-        public List<int> MapTerritoryHash { get; set; }
-        public IDictionary<string, List<int>> MajorEmpireTerritories { get; set; }
-        public IDictionary<string, List<int>> MajorEmpireCoreTerritories { get; set; }
-        public IDictionary<string, List<int>> MinorFactionTerritories { get; set; }
-        public IDictionary<int, string> ContinentNames { get; set; }
-        public IDictionary<int, string> TerritoryNames { get; set; }
-        public List<CityPosition> CityMap { get; set; }
-        public IDictionary<int, Hexagon.OffsetCoords> ExtraPositions { get; set; }
-        public IDictionary<int, Hexagon.OffsetCoords> ExtraPositionsNewWorld { get; set; }
-        public List<string> NoCapital { get; set; }
-        public List<string> NomadCultures { get; set; }
-
-    }
-
     public class TerritoriesLoadingList
     {
         public int loadOrder;
@@ -86,6 +38,8 @@ namespace Gedemon.Uchronia
 
     class ModLoading
     {
+        static readonly string UchroniaAssetName = "Uchronia";
+
         static IDictionary<string, IList<MapTCL>> listTCLMods = new Dictionary<string, IList<MapTCL>>();
 
         static IDictionary<string, TerritoriesLoadingList> MajorEmpireTerritoriesPreList = new Dictionary<string, TerritoriesLoadingList>();
@@ -149,7 +103,7 @@ namespace Gedemon.Uchronia
             List<string> folders = new List<string> { System.IO.Path.Combine(basefolder, TerrainSave.MapsSubDirectory), System.IO.Path.Combine(basefolder, RuntimeModuleFolders.Public.Name), System.IO.Path.Combine(basefolder, RuntimeModuleFolders.Community.Name) };
             foreach (string path in folders)
             {
-                Diagnostics.Log($"[Gedemon] searching for .json files in {path}");
+                Diagnostics.Log($"[Gedemon] searching for files in {path}");
                 if (Directory.Exists(path))
                 {
                     DirectoryInfo directoryInfo = new DirectoryInfo(path);
@@ -554,92 +508,154 @@ namespace Gedemon.Uchronia
             ExtraPositionsPreList.Clear();
             ExtraPositionsNewWorldPreList.Clear();
         }
-    }
 
-    //*
-    [HarmonyPatch(typeof(AssetDatabase))]
-    public class AssetDatabase_Patch
-    {
-        [HarmonyPatch("TryMountAssetBundle")]
-        [HarmonyPatch(new Type[] { typeof(string), typeof(string), typeof(uint), typeof(IAssetProvider), typeof(Amplitude.Framework.Asset.AssetBundle.Options) }, new ArgumentType[] { ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Out, ArgumentType.Normal })]
-        [HarmonyPrefix]
-        public static bool TryMountAssetBundle(string providerName, string path, uint assetBundleFlags, Amplitude.Framework.Asset.AssetBundle.Options options)
+        [HarmonyPatch(typeof(Amplitude.Mercury.Application))]
+        public class Application_Patch
         {
-            if (path.Contains("Community"))
+
+            [HarmonyPatch("DoReloadRuntime")]
+            [HarmonyPrefix]
+            public static bool DoReloadRuntime()
             {
-                Diagnostics.LogError($"[Gedemon] [AssetDatabase] TryMountAssetBundle from \\Community\\ : providerName = {providerName}, assetBundleFlags = {assetBundleFlags}, options = {options}");
-                Diagnostics.LogError($"[Gedemon] [AssetDatabase] Path = {path}");
-                UnityEngine.AssetBundle assetBundle = null;
-                bool flag = false;
-                try
+                Uchronia.Log($"[Gedemon][Application][DoReloadRuntime] Amplitude.Mercury.Application.CommandLineArguments exists =  {Amplitude.Mercury.Application.CommandLineArguments != null}");
+
+                if (Amplitude.Mercury.Application.CommandLineArguments == null)
                 {
-                    flag = AssetDatabase.TryGetAssetBundleFromPath(path, out assetBundle);
-                    if (!flag)
+                    Amplitude.Mercury.Application.CommandLineArguments = new Amplitude.Mercury.CommandLineArguments { RuntimeModuleNames = new string[] { UchroniaAssetName } };
+                }
+                else
+                {
+                    Uchronia.Log($"[Gedemon][Application][DoReloadRuntime] RuntimeModuleNames exists =  {Amplitude.Mercury.Application.CommandLineArguments.RuntimeModuleNames != null}");
+                    if (Amplitude.Mercury.Application.CommandLineArguments.RuntimeModuleNames == null)
                     {
-                        assetBundle = UnityEngine.AssetBundle.LoadFromFile(path);
-                    }
-                    if (assetBundle != null)
-                    {
-                        Diagnostics.Log($"[Gedemon] [AssetDatabase] GetAllAssetNames, loaded: {flag}).");
-                        string[] assetFiles = assetBundle.GetAllAssetNames();
-                        foreach (string assetName in assetFiles)
-                        {
-                            string lowerCase = assetName.ToLower();
-                            if (lowerCase.EndsWith("tcl.json"))
-                            {
-                                Diagnostics.Log($"[Gedemon] [AssetDatabase] assetBundle contains *tcl.json ({assetName})");
-                                TextAsset textAsset = assetBundle.LoadAsset<TextAsset>(assetName);
-                                //Diagnostics.LogWarning($"[Gedemon] [RuntimeManager] TCL.json = {textAsset.text}");
-                                ModLoading.AddTCLfromJSON(textAsset.text, providerName);
-                            }
-                            if (lowerCase.EndsWith(".xml"))
-                            {
-                                Diagnostics.Log($"[Gedemon] [AssetDatabase] assetBundle contains *.xml ({assetName})");
-                                TextAsset textAsset = assetBundle.LoadAsset<TextAsset>(assetName);
-                                DatabaseUtils.LoadXML(textAsset.text, providerName, inputIsText:true);
-                                //Diagnostics.LogWarning($"[Gedemon] [RuntimeManager] TCL.json = {textAsset.text}");
-                            }
-                        }
+                        Amplitude.Mercury.Application.CommandLineArguments.RuntimeModuleNames = new string[] { UchroniaAssetName };
                     }
                     else
                     {
-                        Diagnostics.LogError($"[Gedemon] [AssetDatabase] Failed to load asset bundle, loaded: {flag}).");
-                    }
-
-                }
-                catch (Exception exception)
-                {
-                    Diagnostics.LogException(exception);
-                }
-                finally
-                {
-                    if (assetBundle != null && !flag)
-                    {
-                        assetBundle.Unload(unloadAllLoadedObjects: false);
-                        assetBundle = null;
+                        Amplitude.Mercury.Application.CommandLineArguments.RuntimeModuleNames.AddItem( UchroniaAssetName );
                     }
                 }
+                return true;
             }
-            return true;
         }
 
-        [HarmonyPatch("TryMountAssetBundle")]
-        [HarmonyPatch(new Type[] { typeof(string), typeof(string), typeof(uint), typeof(IAssetProvider), typeof(Amplitude.Framework.Asset.AssetBundle.Options) }, new ArgumentType[] { ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Out, ArgumentType.Normal })]
-        [HarmonyPostfix]
-        public static void TryMountAssetBundlePost(string providerName, string path, uint assetBundleFlags, Amplitude.Framework.Asset.AssetBundle.Options options)
+        [HarmonyPatch(typeof(RuntimeManager))]
+        public class RuntimeManager_Patch
         {
-            
-        }
 
-        [HarmonyPatch("UnmountAssetBundle")]
-        [HarmonyPatch(new Type[] { typeof(string) })]
-        [HarmonyPrefix]
-        public static bool UnmountAssetBundle(string providerName)
-        {
-            ModLoading.RemoveModdedTCL(providerName);
-            return true;
+            [HarmonyPatch("DoLoadRuntimeModuleDatabase")]
+            [HarmonyPrefix]
+            public static bool DoLoadRuntimeModuleDatabase()
+            {
+                Uchronia.Log($"[Gedemon][RuntimeManager][DoLoadRuntimeModuleDatabase] Amplitude.Mercury.Application.CommandLineArguments exists =  {Amplitude.Mercury.Application.CommandLineArguments != null}");
+
+                if (Amplitude.Mercury.Application.CommandLineArguments == null)
+                {
+                    Amplitude.Mercury.Application.CommandLineArguments = new Amplitude.Mercury.CommandLineArguments { RuntimeModuleNames = new string[] { UchroniaAssetName } };
+                }
+                else
+                {
+                    string[] runtimeModuleNames = Amplitude.Mercury.Application.CommandLineArguments.RuntimeModuleNames;
+                    if (runtimeModuleNames != null && runtimeModuleNames.Length != 0)
+                    {
+                        foreach (string text in runtimeModuleNames)
+                        {
+                            Uchronia.Log($"[Gedemon][RuntimeManager][DoLoadRuntimeModuleDatabase] Amplitude.Mercury.Application.CommandLineArguments runtimeModuleName =  {text}");
+                        }
+                        //Amplitude.Mercury.Application.CommandLineArguments.RuntimeModuleNames.AddItem(UchroniaAsset);
+                    }
+                    else
+                    {
+                        Amplitude.Mercury.Application.CommandLineArguments.RuntimeModuleNames = new string[] { UchroniaAssetName };
+                    }
+                }
+                return true;
+            }
         }
+        //*
+        [HarmonyPatch(typeof(AssetDatabase))]
+        public class AssetDatabase_Patch
+        {
+            [HarmonyPatch("TryMountAssetBundle")]
+            [HarmonyPatch(new Type[] { typeof(string), typeof(string), typeof(uint), typeof(IAssetProvider), typeof(Amplitude.Framework.Asset.AssetBundle.Options) }, new ArgumentType[] { ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Out, ArgumentType.Normal })]
+            [HarmonyPrefix]
+            public static bool TryMountAssetBundle(string providerName, string path, uint assetBundleFlags, Amplitude.Framework.Asset.AssetBundle.Options options)
+            {
+                if (path.Contains("Community"))
+                {
+                    Diagnostics.LogError($"[Gedemon] [AssetDatabase] TryMountAssetBundle from \\Community\\ : providerName = {providerName}, assetBundleFlags = {assetBundleFlags}, options = {options}");
+                    Diagnostics.LogError($"[Gedemon] [AssetDatabase] Path = {path}");
+                    UnityEngine.AssetBundle assetBundle = null;
+                    bool flag = false;
+                    try
+                    {
+                        flag = AssetDatabase.TryGetAssetBundleFromPath(path, out assetBundle);
+                        if (!flag)
+                        {
+                            assetBundle = UnityEngine.AssetBundle.LoadFromFile(path);
+                        }
+                        if (assetBundle != null)
+                        {
+                            Diagnostics.Log($"[Gedemon] [AssetDatabase] GetAllAssetNames, loaded: {flag}).");
+                            string[] assetFiles = assetBundle.GetAllAssetNames();
+                            foreach (string assetName in assetFiles)
+                            {
+                                string lowerCase = assetName.ToLower();
+                                if (lowerCase.EndsWith("tcl.json"))
+                                {
+                                    Diagnostics.Log($"[Gedemon] [AssetDatabase] assetBundle contains *tcl.json ({assetName})");
+                                    TextAsset textAsset = assetBundle.LoadAsset<TextAsset>(assetName);
+                                    //Diagnostics.LogWarning($"[Gedemon] [RuntimeManager] TCL.json = {textAsset.text}");
+                                    ModLoading.AddTCLfromJSON(textAsset.text, providerName);
+                                }
+                                if (lowerCase.EndsWith(".xml"))
+                                {
+                                    Diagnostics.Log($"[Gedemon] [AssetDatabase] assetBundle contains *.xml ({assetName})");
+                                    TextAsset textAsset = assetBundle.LoadAsset<TextAsset>(assetName);
+                                    DatabaseUtils.LoadXML(textAsset.text, providerName, inputIsText: true);
+                                    //Diagnostics.LogWarning($"[Gedemon] [RuntimeManager] TCL.json = {textAsset.text}");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Diagnostics.LogError($"[Gedemon] [AssetDatabase] Failed to load asset bundle, loaded: {flag}).");
+                        }
+
+                    }
+                    catch (Exception exception)
+                    {
+                        Diagnostics.LogException(exception);
+                    }
+                    finally
+                    {
+                        if (assetBundle != null && !flag)
+                        {
+                            assetBundle.Unload(unloadAllLoadedObjects: false);
+                            assetBundle = null;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            [HarmonyPatch("TryMountAssetBundle")]
+            [HarmonyPatch(new Type[] { typeof(string), typeof(string), typeof(uint), typeof(IAssetProvider), typeof(Amplitude.Framework.Asset.AssetBundle.Options) }, new ArgumentType[] { ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Out, ArgumentType.Normal })]
+            [HarmonyPostfix]
+            public static void TryMountAssetBundlePost(string providerName, string path, uint assetBundleFlags, Amplitude.Framework.Asset.AssetBundle.Options options)
+            {
+
+            }
+
+            [HarmonyPatch("UnmountAssetBundle")]
+            [HarmonyPatch(new Type[] { typeof(string) })]
+            [HarmonyPrefix]
+            public static bool UnmountAssetBundle(string providerName)
+            {
+                ModLoading.RemoveModdedTCL(providerName);
+                return true;
+            }
+        }
+        //*/
     }
-    //*/
-
 }

@@ -54,6 +54,39 @@ namespace Gedemon.Uchronia
 				__result = FixedPoint.Round(initialCost);
 				return false;
 			}
+
+
+			[HarmonyPatch("CheckTechnologyPrerequisite")]
+			[HarmonyPrefix]
+			public static bool CheckTechnologyPrerequisite(DepartmentOfScience __instance, ref bool __result, TechnologyPrerequisite technologyPrerequisite)
+			{
+				if(!DatabaseUtils.ResearchNeedAllPrerequisite)
+					return true;
+
+				if (technologyPrerequisite.TechnologyNames == null || technologyPrerequisite.TechnologyNames.Length == 0)
+				{
+					__result = true;
+					return false;
+				}
+				int num = technologyPrerequisite.TechnologyNames.Length;
+				for (int i = 0; i < num; i++)
+				{
+					StaticString staticString = technologyPrerequisite.TechnologyNames[i];
+					int technologyIndex = __instance.GetTechnologyIndex(staticString);
+					if (technologyIndex < 0)
+					{
+						Diagnostics.LogError($"Technology '{staticString}' not found.");
+					}
+					else if (__instance.Technologies.Data[technologyIndex].TechnologyState != TechnologyStates.Completed)
+					{
+						__result = false;
+						return false;
+					}
+				}
+				__result = true;
+				return false;
+			}
+
 		}
 
 		public static FixedPoint GetSharedKnowledgeModifier(MajorEmpire majorEmpire, Technology technology)

@@ -29,7 +29,7 @@ namespace Gedemon.Uchronia
 	public class Uchronia : BaseUnityPlugin
 	{
 		public const string pluginGuid = "gedemon.humankind.uchronia";
-		public const string pluginVersion = "1.0.0.0";
+		public const string pluginVersion = "1.0.0.1";
 
 		public static bool LoggingStartData = false;
 
@@ -54,7 +54,7 @@ namespace Gedemon.Uchronia
 		{
 			Logger.LogInfo($"[Gedemon][Uchronia][Started]");
 
-			InvokeRepeating("Repeat", 2.0f, 0.5f);
+			InvokeRepeating("SlowUpdate", 2.0f, 0.5f);
 		}
 
 		private void Update()
@@ -92,7 +92,7 @@ namespace Gedemon.Uchronia
 			}
 		}
 
-		void Repeat()
+		void SlowUpdate()
 		{
 			UI.UpdateObjects();
 		}

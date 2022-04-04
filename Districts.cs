@@ -8,30 +8,46 @@ using Amplitude.Mercury.Simulation;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Xml;
+using System.Linq;
 using UnityEngine;
 using static Amplitude.Mercury.Simulation.ConstructibleHelper;
 using Diagnostics = Amplitude.Diagnostics;
+using Amplitude.Mercury.Fx.HgFx;
+using Amplitude.Mercury.Data;
 
 namespace Gedemon.Uchronia
 {
     class Districts
     {
-        // TryInsertExtensionDistrictDefinitionRow -> get copy ConstructibleDefinition, call edit as ExtensionDistrictDefinition, get/copy/edit related table entries: ConstructibleUIMapper, ...
+        public static IDictionary<StaticString, StaticString> VisualReplacementExtension = new Dictionary<StaticString, StaticString>();
+        public static IDictionary<StaticString, StaticString> VisualReplacementBuildingVisualAffinity = new Dictionary<StaticString, StaticString>();
+
         public static bool TryUpdateExtensionDistrictDefinitionRow(XmlReader reader)
         {
             Diagnostics.LogWarning($"[Gedemon][Districts][TryUpdateExtensionDistrictDefinitionRow]");
             int updatedField = 0;
             if (DatabaseUtils.TryGetAttribute(reader, "Name", out string name))
             {
+                StaticString ExtensionName = new StaticString(name);
                 ConstructibleDefinition row = ScriptableObject.CreateInstance<ConstructibleDefinition>(); // new EraDefinition();
                 var database = Databases.GetDatabase<ConstructibleDefinition>();
-                if (database.TryGetValue(new StaticString(name), out row))
+                if (database.TryGetValue(ExtensionName, out row))
                 {
                     Diagnostics.Log($"[Gedemon][Districts][TryUpdateExtensionDistrictDefinitionRow] Update Row: {name}");
                     ExtensionDistrictDefinition DatabaseRow = row as ExtensionDistrictDefinition;
                     if (DatabaseRow != null)
                     {
+                        if (DatabaseUtils.TryGetAttribute(reader, "VisualReplacementKey", out string VisualReplacementKey))
+                        {
+                            if (!VisualReplacementExtension.ContainsKey(ExtensionName) && !VisualReplacementBuildingVisualAffinity.ContainsKey(ExtensionName))
+                            {
+                                VisualReplacementExtension.Add(ExtensionName, new StaticString("Extension_" + VisualReplacementKey));
+                                VisualReplacementBuildingVisualAffinity.Add(ExtensionName, new StaticString("BuildingVisualAffinity_" + VisualReplacementKey));
+                                updatedField++;
+                            }
+                        }
                         if (DatabaseUtils.TryGetAttribute(reader, "AllowConnectionWithOtherBorough", out string AllowConnectionWithOtherBorough))
                         {
                             DatabaseRow.AllowConnectionWithOtherBorough = AllowConnectionWithOtherBorough == "1" ? true: false;
@@ -63,25 +79,33 @@ namespace Gedemon.Uchronia
                         }
                         if (DatabaseUtils.TryGetAttributeWithoutSpace(reader, "NeighbourPrerequisiteDistricts", out string NeighbourPrerequisiteDistricts))
                         {
-                            DistrictPrerequisite.Operators tagOperator = DistrictPrerequisite.Operators.Any;
+                            NeighbourTilesPrerequisite.Operators tagOperatorneighbour = NeighbourTilesPrerequisite.Operators.AnyTile;
+                            if (DatabaseUtils.TryGetAttribute(reader, "NeighbourTilesPrerequisiteOperator", out string NeighbourTilesPrerequisiteOperator))
+                            {
+                                if (Enum.IsDefined(typeof(NeighbourTilesPrerequisite.Operators), NeighbourTilesPrerequisiteOperator))
+                                {
+                                    tagOperatorneighbour = (NeighbourTilesPrerequisite.Operators)Enum.Parse(typeof(NeighbourTilesPrerequisite.Operators), NeighbourTilesPrerequisiteOperator);
+                                }
+                            }
+
+                            DistrictPrerequisite.Operators tagOperatorDistrict = DistrictPrerequisite.Operators.Any;
                             if (DatabaseUtils.TryGetAttribute(reader, "NeighbourPrerequisiteDistrictsOperator", out string NeighbourPrerequisiteDistrictsOperator))
                             {
                                 if (Enum.IsDefined(typeof(DistrictPrerequisite.Operators), NeighbourPrerequisiteDistrictsOperator))
                                 {
-                                    tagOperator = (DistrictPrerequisite.Operators)Enum.Parse(typeof(DistrictPrerequisite.Operators), NeighbourPrerequisiteDistrictsOperator);
+                                    tagOperatorDistrict = (DistrictPrerequisite.Operators)Enum.Parse(typeof(DistrictPrerequisite.Operators), NeighbourPrerequisiteDistrictsOperator);
                                 }
                             }
-                            DatabaseRow.NeighbourTilesPrerequisite.DistrictPrerequisite = new DistrictPrerequisite { TagOperator = tagOperator, serializableTags = NeighbourPrerequisiteDistricts.Split(','), HideInUI = false };
+                            DatabaseRow.NeighbourTilesPrerequisite.DistrictPrerequisite = new DistrictPrerequisite { TagOperator = tagOperatorDistrict, serializableTags = NeighbourPrerequisiteDistricts.Split(','), HideInUI = false };
+                            DatabaseRow.NeighbourTilesPrerequisite.NeighbourOperator = tagOperatorneighbour;
                             DatabaseRow.NeighbourTilesPrerequisite.DistrictPrerequisite.InitializeStaticStrings();
                             updatedField++;
                         }
                         if (DatabaseUtils.TryGetAttribute(reader, "CampConstraint", out string CampConstraint))
                         {
-                            Uchronia.Log($"[Gedemon][Districts][TryUpdateExtensionDistrictDefinitionRow] Update Row: {name} for CampConstraint string = {CampConstraint} ");
                             if (Enum.IsDefined(typeof(SettlementStatusPrerequisite.SettlementStatusConstraints), CampConstraint))
                             {
                                 DatabaseRow.SettlementStatusPrerequisite.CampConstraint = (SettlementStatusPrerequisite.SettlementStatusConstraints)Enum.Parse(typeof(SettlementStatusPrerequisite.SettlementStatusConstraints), CampConstraint);
-                                Uchronia.Log($"[Gedemon][Districts][TryUpdateExtensionDistrictDefinitionRow] DatabaseRow.SettlementStatusPrerequisite.CampConstraint = {DatabaseRow.SettlementStatusPrerequisite.CampConstraint}");
                                 updatedField++;
                             }
                         }
@@ -111,6 +135,7 @@ namespace Gedemon.Uchronia
         {
             Diagnostics.Log($"[Gedemon][Districts][TestUpdate]");
 
+            // In case we want to do changes in multiple entries
             {
                 var database = Databases.GetDatabase<ConstructibleDefinition>();
                 foreach (var data in database)
@@ -153,7 +178,7 @@ namespace Gedemon.Uchronia
         {
             int freeDistricts = DatabaseUtils.FreePopulationDistrict;
             float districtPerPopulation = DatabaseUtils.DistrictPerPopulation; // number of district that can be placed per population size
-            Diagnostics.Log($"[Gedemon][Districts][GetMaxPopulationLimitedDistricts] ExtensionDistrictsCount = {settlement.ExtensionDistrictsCount.Value}, Population = {settlement.Population.Value}, limit = {settlement.Population.Value} * {districtPerPopulation} + {freeDistricts} = {settlement.Population.Value * districtPerPopulation + freeDistricts}");
+            //Diagnostics.Log($"[Gedemon][Districts][GetMaxPopulationLimitedDistricts] ExtensionDistrictsCount = {settlement.ExtensionDistrictsCount.Value}, Population = {settlement.Population.Value}, limit = {settlement.Population.Value} * {districtPerPopulation} + {freeDistricts} = {settlement.Population.Value * districtPerPopulation + freeDistricts}");
             return (int)(settlement.Population.Value * districtPerPopulation) + freeDistricts;
         }
 
@@ -195,7 +220,7 @@ namespace Gedemon.Uchronia
                     }
                     break; // other "Money" require Population
                 case ConstructibleCategory.Military:
-                    // Garrison require Population (to prevent spamming), but not all the others
+                    // Garrison require Population (to prevent spamming), but not any of the others
                     if (extensionDistrictDefinition.name != "Extension_Base_Military")
                     {
                         return false;
@@ -212,24 +237,23 @@ namespace Gedemon.Uchronia
             return true;
         }
 
-        public static StatusPrerequisiteFailureFlags CheckPrerequisite(SettlementStatusPrerequisite settlementStatusPrerequisite, Settlement settlement)
+        //[HarmonyPatch(typeof(District))]
+        public class District_patch
         {
-            switch (settlement.SettlementStatus)
+
+            [HarmonyPrefix]
+            [HarmonyPatch(nameof(OnRefreshed))]
+            public static bool OnRefreshed(District __instance) // 
             {
-                case SettlementStatuses.Camp:
-                    if (settlementStatusPrerequisite.CampConstraint == SettlementStatusPrerequisite.SettlementStatusConstraints.NotAvailable)
-                    {
-                        return StatusPrerequisiteFailureFlags.WrongSettlementStatus;
-                    }
-                    return StatusPrerequisiteFailureFlags.None;
-                case SettlementStatuses.City:
-                    if (settlementStatusPrerequisite.CityConstraint == SettlementStatusPrerequisite.SettlementStatusConstraints.NotAvailable)
-                    {
-                        return StatusPrerequisiteFailureFlags.WrongSettlementStatus;
-                    }
-                    return StatusPrerequisiteFailureFlags.None;
-                default:
-                    return StatusPrerequisiteFailureFlags.WrongSettlementStatus;
+
+                return true;
+            }
+
+            [HarmonyPostfix]
+            [HarmonyPatch(nameof(OnRefreshed))]
+            public static void OnRefreshedPost(District __instance) // 
+            {
+
             }
         }
 
@@ -359,6 +383,7 @@ namespace Gedemon.Uchronia
 
         }
 
+        // to do: try to move to PresentationEntityFactoryController_Patch
         [HarmonyPatch(typeof(PresentationDistrict))]
         public class PresentationDistrict_Patch
         {
@@ -393,18 +418,14 @@ namespace Gedemon.Uchronia
                     }
                     return true;
                 }
-                //Diagnostics.LogError($"[Gedemon] UpdateFromDistrictInfo districtInfo = {districtInfo.VisualAffinityName}, isStartOrEmpireChange = {isStartOrEmpireChange}, isNewDistrict = {isNewDistrict})");
                 else
                 {
 
                     if (CurrentGame.Data.HistoricVisualAffinity.TryGetValue(districtInfo.TileIndex, out DistrictVisual historicDistrict) && districtInfo.VisualAffinityName != historicDistrict.VisualAffinity)
                     {
+                        //Uchronia.Log($"[Gedemon] UpdateFromDistrictInfo districtInfo = {districtInfo.VisualAffinityName}, isStartOrEmpireChange = {isStartOrEmpireChange}, isNewDistrict = {isNewDistrict})");
 
                         ref TileInfo reference = ref Amplitude.Mercury.Sandbox.Sandbox.World.TileInfo.Data[districtInfo.TileIndex];
-                        //if(CultureUnlock.GetTerritoryName(reference.TerritoryIndex) == "Graecia")
-                        {
-                            //Diagnostics.LogWarning($"[Gedemon] UpdateFromDistrictInfo for {districtInfo.DistrictDefinitionName} at TileIndex #{districtInfo.TileIndex} ({CultureUnlock.GetTerritoryName(reference.TerritoryIndex)}) with different cached visual ({historicDistrict.VisualAffinity}, EraIndex = {historicDistrict.EraIndex}) and info visual ({districtInfo.VisualAffinityName}) (initial = {districtInfo.InitialVisualAffinityName})");
-                        }
                         districtInfo.VisualAffinityName = historicDistrict.VisualAffinity;
                         districtInfo.InitialVisualAffinityName = historicDistrict.VisualAffinity;
                         districtInfo.EraIndex = historicDistrict.EraIndex;
@@ -416,5 +437,108 @@ namespace Gedemon.Uchronia
             }
         }
 
+        // Use Custom Unique Visual on Generic Districts
+        [HarmonyPatch(typeof(PresentationEntityFactoryController))]
+        public class PresentationEntityFactoryController_Patch
+        {
+
+            [HarmonyPrefix]
+            [HarmonyPatch(nameof(SynchronizeDistrictInfo))]
+            public static bool SynchronizeDistrictInfo(PresentationEntityFactoryController __instance)
+            {
+
+                if ((Snapshots.GameSnapshot.PresentationData.CameraSequenceScope & CameraSequenceScopeType.District) != 0 && __instance.lastFrame > 0)
+                {
+                    return false;
+                }
+                ref ArrayWithFrame<DistrictInfo> localEmpireDistrictInfo = ref Snapshots.GameSnapshot.PresentationData.LocalEmpireInfo.DistrictInfo;
+                if (!__instance.districtSynchronisationNotFinished && localEmpireDistrictInfo.Frame < __instance.lastFrame && Snapshots.GameSnapshot.PresentationData.LocalEmpireInfo.EmpireIndex == __instance.lastEmpireIndex)
+                {
+                    return false;
+                }
+                bool isStartOrEmpireChange = __instance.lastFrame == -1 || Snapshots.GameSnapshot.PresentationData.LocalEmpireInfo.EmpireIndex != __instance.lastEmpireIndex;
+                int length = localEmpireDistrictInfo.Length;
+                __instance.districtPresentationEntities.ResizeIFN(length);
+                int num = 0;
+                for (int i = 0; i < length; i++)
+                {
+                    if (num >= PresentationEntityFactoryController.MaxDistrictChangePerFrame)
+                    {
+                        break;
+                    }
+                    ref DistrictInfo districtInfo = ref localEmpireDistrictInfo.Data[i];
+
+                    // Gedemon <<<<<
+                    if (VisualReplacementExtension.TryGetValue(districtInfo.DistrictDefinitionName, out StaticString replacementExtension) && VisualReplacementBuildingVisualAffinity.TryGetValue(districtInfo.DistrictDefinitionName, out StaticString replacementVisualAffinity))
+                    //if (districtInfo.DistrictDefinitionName.ToString() == "Extension_Base_HeavyIndustry") // || districtInfo.DistrictDefinitionName.ToString() == "Extension_Era1_Nubia")
+                    {
+
+                        var database = Databases.GetDatabase<ConstructibleDefinition>();
+                        if (database.TryGetValue(replacementExtension, out var constructibleDefinition))
+                        {
+                            ExtensionDistrictDefinition districtDefinition = constructibleDefinition as ExtensionDistrictDefinition;
+                            if(districtDefinition !=null)
+                            {
+                                //Uchronia.Log($"[Gedemon][PresentationEntityFactoryController] SynchronizeDistrictInfo : VisualReplacementExtension for DistrictDefinition = {replacementExtension}, VisualReplacementBuildingVisualAffinity = {replacementVisualAffinity}");
+                                //Uchronia.Log($"[Gedemon][PresentationEntityFactoryController] SynchronizeDistrictInfo : districtInfo.DistrictDefinitionName = {districtInfo.DistrictDefinitionName}, districtInfo.VisualLevel = {districtInfo.VisualLevel}, DistrictDefinition.AdditionalVisualLevels.Length = {districtDefinition.AdditionalVisualLevels.Length}");
+                                //Uchronia.Log($"[Gedemon][PresentationEntityFactoryController] SynchronizeDistrictInfo : districtInfo.VisualAffinityName = {districtInfo.VisualAffinityName}, districtInfo.InitialVisualAffinityName = {districtInfo.InitialVisualAffinityName}, DistrictDefinition.ConstructibleVisualAffinity = {districtDefinition.ConstructibleVisualAffinity.ElementName}");
+
+                                districtInfo.DistrictDefinitionName = replacementExtension;
+                                districtInfo.VisualLevel = districtInfo.VisualLevel > districtDefinition.AdditionalVisualLevels.Length ? districtDefinition.AdditionalVisualLevels.Length : districtInfo.VisualLevel;
+                                districtInfo.InitialVisualAffinityName = replacementVisualAffinity;
+                                //DatabaseUtils.ShowObject(districtInfo);
+                            }
+                        }
+                    }
+                    // Gedemon >>>>>
+
+
+                    ref PresentationEntityAccess<PresentationDistrict>.EntityAccess reference2 = ref __instance.districtPresentationEntities.Content[i];
+                    PresentationDistrict entity = reference2.Entity;
+                    if (districtInfo.PoolAllocationIndex < 0 || districtInfo.SimulationEntityGUID == 0L || districtInfo.HasConstructionOver)
+                    {
+                        if (entity != null)
+                        {
+                            if ((ulong)entity.SettlementGUID >= 0)
+                            {
+                                __instance.GetPresentationSettlement(entity.SettlementGUID)?.UnregisterDistrict(entity);
+                            }
+                            reference2.ReleaseEntity(PresentationEntity.ReleasePolicy.Default);
+                        }
+                        continue;
+                    }
+                    bool isNewDistrict = districtInfo.ConstructionFrame >= __instance.lastFrame;
+                    if (entity == null)
+                    {
+                        entity = PresentationDistrict.CreatePresentationDistrict(ref districtInfo, __instance.entityFactoryTransform, isStartOrEmpireChange, isNewDistrict);
+                        reference2.Init(entity);
+                        if ((ulong)entity.SettlementGUID >= 0)
+                        {
+                            __instance.GetPresentationSettlement(entity.SettlementGUID)?.RegisterDistrict(entity);
+                        }
+                        num++;
+                        continue;
+                    }
+                    bool num2 = districtInfo.SettlementSimulationEntityGUID != entity.SettlementGUID;
+                    if (num2)
+                    {
+                        __instance.GetPresentationSettlement(entity.SettlementGUID)?.UnregisterDistrict(entity);
+                    }
+                    bool flag = entity.UpdateFromDistrictInfo(ref districtInfo, isStartOrEmpireChange, isNewDistrict);
+                    reference2.TileIndex = districtInfo.TileIndex;
+                    reference2.Guid = districtInfo.SimulationEntityGUID;
+                    if (num2)
+                    {
+                        __instance.GetPresentationSettlement(entity.SettlementGUID)?.RegisterDistrict(entity);
+                    }
+                    num += (flag ? 1 : 0);
+                }
+                __instance.districtSynchronisationNotFinished = num >= PresentationEntityFactoryController.MaxDistrictChangePerFrame;
+
+                return false;
+            }
+        }
+
     }
+
 }

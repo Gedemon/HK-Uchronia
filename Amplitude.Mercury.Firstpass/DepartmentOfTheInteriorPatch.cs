@@ -4,6 +4,7 @@ using Amplitude;
 using Amplitude.Mercury.Interop;
 using Amplitude.Mercury;
 using System.Collections.Generic;
+using Amplitude.Mercury.Data.Simulation;
 
 namespace Gedemon.Uchronia
 {
@@ -102,6 +103,53 @@ namespace Gedemon.Uchronia
 		}
 		//*/
 		// private Settlement DetachTerritoryFromCityAndCreateNewSettlement(Settlement city, int territoryIndex)
+
+
+
+		//[HarmonyPatch("ChangeDistrictDefinition")]
+		//[HarmonyPrefix]
+		public static void ChangeDistrictDefinition(DepartmentOfTheInterior __instance, District district, DistrictDefinition districtDefinition)
+		{
+
+			//Diagnostics.Log($"[Gedemon][DepartmentOfTheInterior] ChangeDistrictDefinition, districtDefinition = {districtDefinition.Name}, district exists = {district != null}");
+			//Uchronia.Log($"[Gedemon][DepartmentOfTheInterior] ChangeDistrictDefinition, districtDefinition exists = {districtDefinition != null}");
+			if (districtDefinition.Name.ToString() == "Extension_Base_HeavyIndustry")
+			{
+
+				Uchronia.Log($"[Gedemon][DepartmentOfTheInterior] ChangeDistrictDefinition Prefix for {districtDefinition.Name}, __instance.PoolAllocationIndex = {district.PoolAllocationIndex}");
+				//districtDefinition.Name = new StaticString("Extension_Era5_Germany");
+
+				ref DistrictInfo districtInfo = ref Amplitude.Mercury.Sandbox.Sandbox.World.DistrictInfo.GetReferenceAt(district.PoolAllocationIndex);
+				Uchronia.Log($"[Gedemon][DepartmentOfTheInterior] ChangeDistrictDefinition Prefix : districtInfo.DistrictDefinitionName = {districtInfo.DistrictDefinitionName}");
+				//districtInfo.DistrictType = district.DistrictType;
+				//districtInfo.DistrictDefinitionName = new StaticString("Extension_Era5_Germany");
+			}
+		}
+		//*
+		//[HarmonyPatch("ChangeDistrictDefinition")]
+		//[HarmonyPostfix]
+		public static void ChangeDistrictDefinitionPost(DepartmentOfTheInterior __instance, District district, DistrictDefinition districtDefinition)
+		{
+
+			//Diagnostics.Log($"[Gedemon][DepartmentOfTheInterior] ChangeDistrictDefinition, districtDefinition = {districtDefinition.Name}, district exists = {district != null}");
+			//Uchronia.Log($"[Gedemon][DepartmentOfTheInterior] ChangeDistrictDefinition, districtDefinition exists = {districtDefinition != null}");
+			if (districtDefinition.Name.ToString() == "Extension_Base_HeavyIndustry")
+			{
+
+				Uchronia.Log($"[Gedemon][DepartmentOfTheInterior] ChangeDistrictDefinition postfix for {districtDefinition.Name}, __instance.PoolAllocationIndex = {district.PoolAllocationIndex}");
+				//districtDefinition.Name = new StaticString("Extension_Era5_Germany");
+
+				ref DistrictInfo districtInfo = ref Amplitude.Mercury.Sandbox.Sandbox.World.DistrictInfo.GetReferenceAt(district.PoolAllocationIndex);
+				Uchronia.Log($"[Gedemon][DepartmentOfTheInterior] ChangeDistrictDefinition Postfix : districtInfo.DistrictDefinitionName = {districtInfo.DistrictDefinitionName}");
+				districtInfo.DistrictType = district.DistrictType;
+				districtInfo.DistrictDefinitionName = new StaticString("Extension_Era5_Germany");
+
+				int districtIndexAt = Snapshots.GameSnapshot.PresentationData.GetDistrictIndexAt(districtInfo.TileIndex);
+				Snapshots.GameSnapshot.PresentationData.DistrictInfo.Data[districtIndexAt].DistrictDefinitionName = new StaticString("Extension_Era5_Germany");
+			}
+		}
+		//*/
+
 
 	}
 

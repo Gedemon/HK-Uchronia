@@ -20,50 +20,35 @@ using Diagnostics = Amplitude.Diagnostics;
 
 namespace Gedemon.Uchronia
 {
-    public class CloneHelpers
+    public class MapTCL
     {
-        public static object DeepClone(object source)
-        {
-            MemoryStream m = new MemoryStream();
-            BinaryFormatter b = new BinaryFormatter();
-            b.Serialize(m, source);
-            m.Position = 0;
-            return b.Deserialize(m);
+        public int LoadOrder { get; set; }
+        public List<int> MapTerritoryHash { get; set; }
+        public IDictionary<string, List<int>> MajorEmpireTerritories { get; set; }
+        public IDictionary<string, List<int>> MajorEmpireCoreTerritories { get; set; }
+        public IDictionary<string, List<int>> MinorFactionTerritories { get; set; }
+        public IDictionary<int, string> ContinentNames { get; set; }
+        public IDictionary<int, string> TerritoryNames { get; set; }
+        public List<CityPosition> CityMap { get; set; }
+        public IDictionary<int, Hexagon.OffsetCoords> ExtraPositions { get; set; }
+        public IDictionary<int, Hexagon.OffsetCoords> ExtraPositionsNewWorld { get; set; }
+        public List<string> NoCapital { get; set; }
+        public List<string> NomadCultures { get; set; }
 
-        }
-        public static bool DeepEquals(object objA, object objB)
-        {
-            MemoryStream serA = serializedStream(objA);
-            MemoryStream serB = serializedStream(objB);
-            if (serA.Length != serA.Length)
-                return false;
-            while (serA.Position < serA.Length)
-            {
-                if (serA.ReadByte() != serB.ReadByte())
-                    return false;
-            }
-            return true;
-
-        }
-        public static MemoryStream serializedStream(object source)
-        {
-            MemoryStream m = new MemoryStream();
-            BinaryFormatter b = new BinaryFormatter();
-            b.Serialize(m, source);
-            m.Position = 0;
-
-            return m;
-        }
     }
 
     class DatabaseUtils
     {
         public static float DistrictPerPopulation;
         public static int FreePopulationDistrict;
+
+        public static bool ResearchNeedAllPrerequisite;
+
         static void SetCachedModDefines()
         {
             TryGetDefine("DistrictPerPopulation", out DistrictPerPopulation, defaultValue : 1.0f);
             TryGetDefine("FreePopulationDistrict", out FreePopulationDistrict, defaultValue: 2);
+            TryGetDefine("ResearchNeedAllPrerequisite", out ResearchNeedAllPrerequisite, defaultValue: false);
         }
         static public bool TryGetDefine(string name, out float value, float defaultValue = 1.0f)
         {
@@ -87,6 +72,17 @@ namespace Gedemon.Uchronia
         {
             value = defaultValue;
             return ModDefines.TryGetValue(name, out value);
+        }
+
+        static public bool TryGetDefine(string name, out bool value, bool defaultValue = false)
+        {
+            if (ModDefines.TryGetValue(name, out string valueString))
+            {
+                value = valueString == "1" || valueString == "true" || valueString == "True";
+                return true;
+            }
+            value = defaultValue;
+            return false;
         }
 
         public static List<int> GetListIntFromString(string text)
@@ -260,18 +256,22 @@ namespace Gedemon.Uchronia
         static public void ShowObject(object source)
         {
             Diagnostics.LogWarning($"[Gedemon] ShowObject: source.GetType() = {source.GetType()}");
+            Uchronia.Log($"[Gedemon] ShowObject: source.GetType() = {source.GetType()}");
 
             foreach (var prop in source.GetType().GetProperties())
             {
                 Diagnostics.Log($"[Gedemon] {prop.Name} = {prop.GetValue(source, null)}");
+                Uchronia.Log($"[Gedemon] {prop.Name} = {prop.GetValue(source, null)}");
             }
             foreach (var prop in source.GetType().GetFields())
             {
                 Diagnostics.Log($"[Gedemon] {prop.Name} = {prop.GetValue(source)}");
+                Uchronia.Log($"[Gedemon] source.GetType().GetFields() : {prop.Name} = {prop.GetValue(source)}");
             }
             foreach (var prop in source.GetType().GetFields((BindingFlags.Instance | BindingFlags.NonPublic)))
             {
                 Diagnostics.Log($"[Gedemon] {prop.Name} = {prop.GetValue(source)}");
+                Uchronia.Log($"[Gedemon] source.GetType().GetFields((BindingFlags.Instance | BindingFlags.NonPublic)) : {prop.Name} = {prop.GetValue(source)}");
             }
             /*
                     type.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
@@ -289,14 +289,18 @@ namespace Gedemon.Uchronia
             foreach (var prop in source.GetType().GetProperties())
             {
                 Diagnostics.Log($"[Gedemon] {prop.Name} = {prop.GetValue(source, null)}");
+                Uchronia.Log($"[Gedemon] {prop.Name} = {prop.GetValue(source, null)}");
+                //destination.GetType().GetProperty(prop.Name).SetValue(destination, prop.GetValue(source, null), null);
             }
             foreach (var prop in source.GetType().GetFields())
             {
-                Diagnostics.Log($"[Gedemon] {prop.Name} = {prop.GetValue(source)}");
+                Diagnostics.Log($"[Gedemon] source.GetType().GetFields() : {prop.Name} = {prop.GetValue(source)}");
+                Uchronia.Log($"[Gedemon] source.GetType().GetFields() : {prop.Name} = {prop.GetValue(source)}");
             }
             foreach (var prop in source.GetType().GetFields((BindingFlags.Instance | BindingFlags.NonPublic)))
             {
-                Diagnostics.Log($"[Gedemon] {prop.Name} = {prop.GetValue(source)}");
+                Diagnostics.Log($"[Gedemon] source.GetType().GetFields((BindingFlags.Instance | BindingFlags.NonPublic)) : {prop.Name} = {prop.GetValue(source)}");
+                Uchronia.Log($"[Gedemon] source.GetType().GetFields((BindingFlags.Instance | BindingFlags.NonPublic)) : {prop.Name} = {prop.GetValue(source)}");
             }
             /*
                     type.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
@@ -653,7 +657,7 @@ namespace Gedemon.Uchronia
                                         rowLoaded = true;
                                         break;
                                     case "ExtensionDistrictDefinition":
-                                        if (Update ? Districts.TryUpdateExtensionDistrictDefinitionRow(xmlReader) : true)
+                                        if (Districts.TryUpdateExtensionDistrictDefinitionRow(xmlReader))
                                         {
                                             rowLoaded = true;
                                         }
@@ -813,16 +817,19 @@ namespace Gedemon.Uchronia
                     for (int i = 0; i < num; i++)
                     {
                         Amplitude.Mercury.Data.Simulation.EndGameCondition endGameCondition = endGameConditions[i];
+
+                        if (endGameCondition == null)
+                            continue;
+
                         bool flag = __instance.EndGameConditionActivation[i];
                         Amplitude.Mercury.Data.Simulation.EndGameCondition_TurnLimit endGameCondition_TurnLimit = endGameCondition as Amplitude.Mercury.Data.Simulation.EndGameCondition_TurnLimit;
 
-                        Diagnostics.LogError($"[Gedemon] [EndGameController] SetEndGameCondition postfix: endGameCondition_TurnLimit[{i}].TurnLimit = {endGameCondition_TurnLimit.TurnLimit}");
-
                         if (endGameCondition_TurnLimit != null)
                         {
+                            Diagnostics.LogError($"[Gedemon] [EndGameController] SetEndGameCondition postfix: endGameCondition_TurnLimit[{i}].TurnLimit = {endGameCondition_TurnLimit.TurnLimit}");
                             if (endGameCondition_TurnLimit.TurnLimit != baseTurnLimit)
                             {
-                                // update EndGameCondition_TurnLimit value, as it seems to be the one used for endgame checks
+                                // also update EndGameCondition_TurnLimit value, as it seems to be the one used for endgame checks
                                 endGameCondition_TurnLimit.TurnLimit = baseTurnLimit;
                                 __instance.TurnLimit = (flag ? ((int)((float)endGameCondition_TurnLimit.TurnLimit * Amplitude.Mercury.Sandbox.Sandbox.GameSpeedController.CurrentGameSpeedDefinition.EndGameTurnLimitMultiplier)) : (-1));
                             }

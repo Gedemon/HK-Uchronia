@@ -13,6 +13,15 @@ using Amplitude.Mercury.Simulation;
 
 namespace Gedemon.Uchronia
 {
+    public class CityPosition
+    {
+        public int TerritoryIndex { get; set; }
+        public string Name { get; set; }
+        public int Row { get; set; }
+        public int Column { get; set; }
+        public int Size { get; set; }
+        public Hexagon.OffsetCoords Position { get; set; }
+    }
     class CityMap
     {
         enum MatchLevel
